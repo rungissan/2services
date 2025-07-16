@@ -1,0 +1,44 @@
+## 3. Functional Requirements
+
+### 3.1 Service A – Data Processor
+
+#### 3.1.1 Streamed Data Fetching & File Saving
+
+- Fetch large datasets from public APIs using Node.js streams.
+- Save data as `.json` and `.xlsx` via `fs.createWriteStream` and `exceljs`.
+- Ensure stream handling includes backpressure and error handling.
+
+#### 3.1.2 File Upload & Parsing
+
+- Expose API to upload files (JSON/Excel).
+- Parse uploaded content programmatically.
+- Insert parsed data into MongoDB using bulk operations.
+- Include error handling, validation, and deduplication.
+
+#### 3.1.3 Search API
+
+- Provide REST endpoint to search MongoDB data.
+- Enable text indexing, filtering, and pagination.
+- Use cursor-based pagination if dataset is large.
+
+#### 3.1.4 Time-Series Event Publication (Redis)
+
+- Publish all API actions/events via Redis Pub/Sub.
+- Push associated metrics to RedisTimeSeries using `TS.ADD`.
+- Structure metrics with labels (e.g., `metric`, `source`, `file`, `service`).
+- Example message payload:
+
+```json
+{
+  "timestamp": 1721070000000,
+  "event": "insert_complete",
+  "source": "file_upload",
+  "filename": "temperature-data-2025.xlsx",
+  "metrics": [
+    { "label": "temperature", "value": 32.5 },
+    { "label": "humidity", "value": 85 }
+  ]
+}
+```
+
+Public faced Api with json file https://www.ura.org.ua/timeseries_data_quoter.json
