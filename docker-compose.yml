@@ -8,10 +8,10 @@ services:
       target: production
     container_name: two-services-servicea
     ports:
-      - "3000:3000"
+      - "3001:3001"
     environment:
       - NODE_ENV=production
-      - PORT=3000
+      - PORT=3001
     env_file:
       - .env
     networks:
@@ -34,10 +34,10 @@ services:
       target: production
     container_name: two-services-serviceb
     ports:
-      - "3001:3001"
+      - "3002:3002"
     environment:
       - NODE_ENV=production
-      - PORT=3001
+      - PORT=3002
     env_file:
       - .env
     networks:

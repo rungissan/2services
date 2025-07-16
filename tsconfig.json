@@ -14,6 +14,9 @@
     },
     {
       "path": "./serviceA"
+    },
+    {
+      "path": "./shared"
     }
   ]
 }

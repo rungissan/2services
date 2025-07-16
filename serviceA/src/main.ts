@@ -3,69 +3,44 @@
  * This is only a minimal backend to get started.
  */
 
-import { Logger } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { json } from 'body-parser';
-import express from 'express';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app/app.module';
-import { fetchAndSaveData } from './app/data-fetcher';
-import { publishEvent } from './app/event-publisher';
-import { uploadAndParseFile } from './app/file-uploader';
-import { searchDatabase } from './app/search-api';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const globalPrefix = 'api';
   app.setGlobalPrefix(globalPrefix);
-  const port = process.env.PORT || 3000;
 
-  const server = express();
-  server.use(json());
+  // Enable validation globally
+  app.useGlobalPipes(new ValidationPipe({
+    whitelist: true,
+    forbidNonWhitelisted: true,
+    transform: true,
+  }));
 
-  // Streamed Data Fetching & File Saving
-  server.get('/fetch-data', async (req, res) => {
-    try {
-      await fetchAndSaveData();
-      res.status(200).send('Data fetched and saved successfully.');
-    } catch (error) {
-      res.status(500).send(`Error: ${error.message}`);
-    }
-  });
+  // Swagger configuration
+  const config = new DocumentBuilder()
+    .setTitle('Service A - Data Processor')
+    .setDescription('API for data ingestion, file processing, and search operations')
+    .setVersion('1.0')
+    .addTag('data-fetcher', 'Streamed data fetching operations')
+    .addTag('file-upload', 'File upload and parsing operations')
+    .addTag('search', 'Database search operations')
+    .build();
 
-  // File Upload & Parsing
-  server.post('/upload-file', async (req, res) => {
-    try {
-      await uploadAndParseFile(req);
-      res.status(200).send('File uploaded and parsed successfully.');
-    } catch (error) {
-      res.status(500).send(`Error: ${error.message}`);
-    }
-  });
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api/docs', app, document);
 
-  // Search API
-  server.get('/search', async (req, res) => {
-    try {
-      const results = await searchDatabase(req.query);
-      res.status(200).json(results);
-    } catch (error) {
-      res.status(500).send(`Error: ${error.message}`);
-    }
-  });
-
-  // Time-Series Event Publication
-  server.post('/publish-event', async (req, res) => {
-    try {
-      await publishEvent(req.body);
-      res.status(200).send('Event published successfully.');
-    } catch (error) {
-      res.status(500).send(`Error: ${error.message}`);
-    }
-  });
-
-  app.use(server);
-
+  const port = process.env.PORT || 3001;
   await app.listen(port);
-  Logger.log(`🚀 Application is running on: http://localhost:${port}/${globalPrefix}`);
+  Logger.log(
+    `🚀 Service A is running on: http://localhost:${port}/${globalPrefix}`
+  );
+  Logger.log(
+    `📚 Swagger docs available at: http://localhost:${port}/${globalPrefix}/docs`
+  );
 }
 
 bootstrap();
