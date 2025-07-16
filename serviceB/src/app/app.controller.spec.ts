@@ -13,9 +13,19 @@ describe('AppController', () => {
   });
 
   describe('getData', () => {
-    it('should return "Hello from ServiceB API"', () => {
+    it('should return service information', () => {
       const appController = app.get<AppController>(AppController);
-      expect(appController.getData()).toEqual({message: 'Hello from ServiceB API'});
+      const expectedResponse = {
+        message: 'Hello from ServiceB API',
+        service: 'Logger & Reporter Service',
+        features: [
+          'Redis Event Subscription',
+          'MongoDB Event Logging',
+          'Log Query API',
+          'PDF Report Generation'
+        ]
+      };
+      expect(appController.getData()).toEqual(expectedResponse);
     });
   });
 });

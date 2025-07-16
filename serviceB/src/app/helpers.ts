@@ -22,7 +22,7 @@ export class ApiResponseHelper {
 export class PaginationHelper {
   static validatePagination(query: PaginationQuery): Required<PaginationQuery> {
     const page = Math.max(1, query.page || 1);
-    const limit = Math.min(100, Math.max(1, query.limit || 10));
+    const limit = Math.min(100, Math.max(1, query.limit ?? 10));
     const sortBy = query.sortBy || 'createdAt';
     const sortOrder = query.sortOrder === 'asc' ? 'asc' : 'desc';
 

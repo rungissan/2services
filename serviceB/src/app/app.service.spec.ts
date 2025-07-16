@@ -13,8 +13,17 @@ describe('AppService', () => {
   });
 
   describe('getData', () => {
-    it('should return "Hello from ServiceB API"', () => {
-      expect(service.getData()).toEqual({ message: 'Hello from ServiceB API' });
+    it('should return service information', () => {
+      expect(service.getData()).toEqual({
+        message: 'Hello from ServiceB API',
+        service: 'Logger & Reporter Service',
+        features: [
+          'Redis Event Subscription',
+          'MongoDB Event Logging',
+          'Log Query API',
+          'PDF Report Generation'
+        ]
+      });
     });
   });
 });
