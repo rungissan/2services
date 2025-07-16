@@ -123,6 +123,30 @@ services:
       retries: 3
       start_period: 20s
 
+  pdf-generator:
+    build:
+      context: ./pdf-generator
+      dockerfile: Dockerfile
+    container_name: two-services-pdf-generator-dev
+    ports:
+      - "50051:50051"
+    environment:
+      - GRPC_PORT=50051
+      - REDIS_TIMESERIES_ADDR=redis-timeseries:6379
+      - REDIS_PASSWORD=password
+    volumes:
+      - ./pdf-generator:/app
+    networks:
+      - microservices-network
+    depends_on:
+      - redis-timeseries
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "50051"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
 volumes:
   mongodb-dev-data:
     driver: local

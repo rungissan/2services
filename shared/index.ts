@@ -12,5 +12,8 @@ export * from './services/logger.service';
 export * from './services/mongo.service';
 export * from './services/redis.service';
 
+// gRPC clients exports
+export * from './grpc-clients/pdf-generator.client';
+
 // Utils exports
 export * from './utils/helpers';
