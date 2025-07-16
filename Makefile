@@ -103,11 +103,48 @@ docker-clean: ## Clean Docker resources
 	docker-compose down -v --remove-orphans
 	docker system prune -a -f
 
+docker-clean-volumes: ## Clean Docker volumes (WARNING: This will delete all data)
+	docker-compose down -v
+	docker volume prune -f
+
+mongo-cli: ## Connect to MongoDB CLI
+	docker exec -it two-services-mongodb mongosh -u admin -p password --authenticationDatabase admin
+
+redis-cli: ## Connect to Redis CLI
+	docker exec -it two-services-redis redis-cli -a password
+
+redis-timeseries-cli: ## Connect to Redis TimeSeries CLI
+	docker exec -it two-services-redis-timeseries redis-cli -a password
+
+redis-pubsub-cli: ## Connect to Redis Pub/Sub CLI
+	docker exec -it two-services-redis-pubsub redis-cli -a password
+
+docker-db-only: ## Start only database services
+	docker-compose up -d mongodb redis redis-timeseries redis-pubsub
+
+docker-services-only: ## Start only application services
+	docker-compose up -d servicea serviceb
+
 health-check: ## Check health of running services
 	curl -f http://localhost:3000/api || echo "ServiceA not responding"
 	curl -f http://localhost:3001/api || echo "ServiceB not responding"
+	docker exec two-services-mongodb mongosh --eval "db.adminCommand('ping')" || echo "MongoDB not responding"
+	docker exec two-services-redis redis-cli -a password ping || echo "Redis not responding"
+
+backup-mongodb: ## Backup MongoDB data
+	docker exec two-services-mongodb mongodump --username admin --password password --authenticationDatabase admin --out /tmp/backup
+	docker cp two-services-mongodb:/tmp/backup ./backup-$(shell date +%Y%m%d_%H%M%S)
+
+restore-mongodb: ## Restore MongoDB data (specify BACKUP_DIR)
+	@if [ -z "$(BACKUP_DIR)" ]; then echo "Please specify BACKUP_DIR=path/to/backup"; exit 1; fi
+	docker cp $(BACKUP_DIR) two-services-mongodb:/tmp/restore
+	docker exec two-services-mongodb mongorestore --username admin --password password --authenticationDatabase admin /tmp/restore
+
+monitor-logs: ## Monitor all service logs
+	docker-compose logs -f servicea serviceb mongodb redis redis-timeseries redis-pubsub
 
 dev-setup: install build ## Complete development setup
 	@echo "Development setup complete!"
 	@echo "Run 'make serve-serviceA' or 'make serve-serviceB' to start development servers"
 	@echo "Run 'make docker-compose-up' to start with Docker Compose"
+	@echo "Run 'make docker-db-only' to start only database services"

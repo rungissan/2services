@@ -1,13 +1,41 @@
 # Two Services - NestJS Microservices with Docker
 
-This project contains two NestJS microservices (serviceA and serviceB) that can be run individually or together using Docker Compose.
+This project contains two NestJS microservices (serviceA and serviceB) that can be run individually or together using Docker Compose. The project includes a complete data infrastructure with MongoDB, Redis, and Redis TimeSeries.
 
 ## Architecture
 
 - **ServiceA**: NestJS microservice running on port 3000
 - **ServiceB**: NestJS microservice running on port 3001
-- Both services are containerized using Docker
-- Docker Compose orchestrates both services
+- **MongoDB**: Document database for persistent data storage
+- **Redis**: In-memory cache and session storage
+- **Redis TimeSeries**: Time-series data storage
+- **Redis Pub/Sub**: Message queuing and real-time communication
+- **Docker Compose**: Container orchestration
+
+## Data Infrastructure
+
+### MongoDB (Port 27017)
+- **Purpose**: Primary data storage for both services
+- **Collections**:
+  - `serviceA_data`, `serviceA_logs`
+  - `serviceB_data`, `serviceB_logs`
+  - `shared_events`, `user_sessions`
+- **Credentials**: admin/password (root), app-user/app-password (application)
+
+### Redis (Port 6379)
+- **Purpose**: Caching and session storage
+- **Configuration**: Persistence enabled with AOF and RDB
+- **Password**: password
+
+### Redis TimeSeries (Port 6380)
+- **Purpose**: Time-series data storage and analytics
+- **Features**: Built-in aggregation, downsampling, and retention policies
+- **Password**: password
+
+### Redis Pub/Sub (Port 6381)
+- **Purpose**: Inter-service communication and event messaging
+- **Features**: Real-time message broadcasting between services
+- **Password**: password
 
 ## Prerequisites
 
@@ -146,6 +174,8 @@ two-services/
    # or for specific service
    docker-compose logs servicea
    docker-compose logs serviceb
+   docker-compose logs mongodb
+   docker-compose logs redis
    ```
 
 ### Development Environment
@@ -160,15 +190,87 @@ two-services/
    docker-compose -f docker-compose.dev.yml up -d
    ```
 
+## Database Access
+
+### MongoDB
+- **Connection String**: `mongodb://app-user:app-password@localhost:27017/two-services`
+- **Admin UI**: Use MongoDB Compass or any MongoDB client
+- **Database**: `two-services`
+
+### Redis
+- **Connection**: `redis://:password@localhost:6379/0`
+- **CLI Access**: `redis-cli -h localhost -p 6379 -a password`
+
+### Redis TimeSeries
+- **Connection**: `redis://:password@localhost:6380/0`
+- **CLI Access**: `redis-cli -h localhost -p 6380 -a password`
+
+### Redis Pub/Sub
+- **Connection**: `redis://:password@localhost:6381/0`
+- **CLI Access**: `redis-cli -h localhost -p 6381 -a password`
+
 ## API Endpoints
 
 ### ServiceA (Port 3000)
 - **GET** `http://localhost:3000/api` - Health check
 - **GET** `http://localhost:3000/api/health` - Health status
+- **POST** `http://localhost:3000/api/data` - Store data in MongoDB
+- **GET** `http://localhost:3000/api/data` - Retrieve data from MongoDB
+- **POST** `http://localhost:3000/api/events` - Publish events to Redis Pub/Sub
 
 ### ServiceB (Port 3001)
 - **GET** `http://localhost:3001/api` - Health check
 - **GET** `http://localhost:3001/api/health` - Health status
+- **POST** `http://localhost:3001/api/metrics` - Store time-series data
+- **GET** `http://localhost:3001/api/metrics` - Retrieve time-series data
+- **POST** `http://localhost:3001/api/cache` - Cache operations
+
+## Data Services Integration
+
+### MongoDB Operations
+```typescript
+// Example usage in services
+import { MongoService } from '../shared/services/mongo.service';
+
+// Store data
+await this.mongoService.insertOne('serviceA_data', {
+  userId: '123',
+  data: { key: 'value' },
+  status: 'active'
+});
+
+// Retrieve data
+const data = await this.mongoService.findOne('serviceA_data', { userId: '123' });
+```
+
+### Redis Operations
+```typescript
+// Example usage in services
+import { RedisService } from '../shared/services/redis.service';
+
+// Caching
+await this.redisService.set('user:123', JSON.stringify(userData), 3600);
+const cachedData = await this.redisService.get('user:123');
+
+// Pub/Sub
+await this.redisService.publish('user-events', JSON.stringify(event));
+await this.redisService.subscribe('user-events', (message) => {
+  console.log('Received:', message);
+});
+```
+
+### Time Series Operations
+```typescript
+// Store metrics
+await this.redisService.addTimeSeries('cpu:usage', Date.now(), 75.5);
+
+// Retrieve metrics
+const metrics = await this.redisService.getTimeSeriesRange(
+  'cpu:usage',
+  Date.now() - 3600000,
+  Date.now()
+);
+```
 
 ## Health Checks
 

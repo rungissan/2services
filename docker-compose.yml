@@ -12,8 +12,14 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
+    env_file:
+      - .env
     networks:
       - microservices-network
+    depends_on:
+      - mongodb
+      - redis
+      - redis-pubsub
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api", "||", "exit", "1"]
       interval: 30s
@@ -32,14 +38,105 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3001
+    env_file:
+      - .env
     networks:
       - microservices-network
+    depends_on:
+      - mongodb
+      - redis
+      - redis-pubsub
+      - redis-timeseries
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api", "||", "exit", "1"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
+
+  # Data Services
+  mongodb:
+    image: mongo:7.0
+    container_name: two-services-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=password
+      - MONGO_INITDB_DATABASE=two-services
+    volumes:
+      - mongodb-data:/data/db
+      - ./docker/mongodb/init:/docker-entrypoint-initdb.d
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: two-services-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass password
+    volumes:
+      - redis-data:/data
+      - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "password", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  redis-timeseries:
+    image: redislabs/redistimeseries:latest
+    container_name: two-services-redis-timeseries
+    ports:
+      - "6380:6379"
+    command: redis-server --loadmodule /usr/lib/redis/modules/redistimeseries.so --appendonly yes --requirepass password
+    volumes:
+      - redis-timeseries-data:/data
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "password", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  redis-pubsub:
+    image: redis:7.2-alpine
+    container_name: two-services-redis-pubsub
+    ports:
+      - "6381:6379"
+    command: redis-server --requirepass password
+    volumes:
+      - redis-pubsub-data:/data
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "password", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  mongodb-data:
+    driver: local
+  redis-data:
+    driver: local
+  redis-timeseries-data:
+    driver: local
+  redis-pubsub-data:
+    driver: local
 
 networks:
   microservices-network:
