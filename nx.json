@@ -51,7 +51,7 @@
       "options": {
         "targetName": "test"
       },
-      "exclude": ["apps/serviceA-e2e/**/*"]
+      "exclude": ["serviceA-e2e/**/*", "serviceB-e2e/**/*"]
     }
   ],
   "targetDefaults": {

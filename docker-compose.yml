@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  servicea:
+    build:
+      context: .
+      dockerfile: serviceA/Dockerfile
+      target: production
+    container_name: two-services-servicea
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api", "||", "exit", "1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  serviceb:
+    build:
+      context: .
+      dockerfile: serviceB/Dockerfile
+      target: production
+    container_name: two-services-serviceb
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api", "||", "exit", "1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+networks:
+  microservices-network:
+    driver: bridge

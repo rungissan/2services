@@ -1,10 +1,10 @@
 {
-  "name": "@two-services/serviceA-e2e",
+  "name": "@two-services/service-b-e2e",
   "version": "0.0.1",
   "private": true,
   "nx": {
     "implicitDependencies": [
-      "@two-services/serviceA"
+      "@two-services/service-b"
     ],
     "targets": {
       "e2e": {
@@ -13,12 +13,12 @@
           "{projectRoot}/test-output/jest/coverage"
         ],
         "options": {
-          "jestConfig": "apps/serviceA-e2e/jest.config.ts",
+          "jestConfig": "serviceB-e2e/jest.config.ts",
           "passWithNoTests": true
         },
         "dependsOn": [
-          "@two-services/serviceA:build",
-          "@two-services/serviceA:serve"
+          "@two-services/service-b:build",
+          "@two-services/service-b:serve"
         ]
       }
     }

@@ -1,5 +1,5 @@
 {
-  "name": "@two-services/serviceA",
+  "name": "@two-services/service-a",
   "version": "0.0.1",
   "private": true,
   "nx": {
@@ -28,15 +28,15 @@
           "build"
         ],
         "options": {
-          "buildTarget": "@two-services/serviceA:build",
+          "buildTarget": "@two-services/service-a:build",
           "runBuildTargetDependencies": false
         },
         "configurations": {
           "development": {
-            "buildTarget": "@two-services/serviceA:build:development"
+            "buildTarget": "@two-services/service-a:build:development"
           },
           "production": {
-            "buildTarget": "@two-services/serviceA:build:production"
+            "buildTarget": "@two-services/service-a:build:production"
           }
         }
       },
@@ -49,7 +49,7 @@
         "dependsOn": [
           "build"
         ],
-        "command": "docker build -f apps/serviceA/Dockerfile . -t two-services-servicea"
+        "command": "docker build -f serviceA/Dockerfile . -t two-services-servicea"
       }
     }
   }

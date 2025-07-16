@@ -1,0 +1,26 @@
+{
+  "name": "@two-services/service-a-e2e",
+  "version": "0.0.1",
+  "private": true,
+  "nx": {
+    "implicitDependencies": [
+      "@two-services/service-a"
+    ],
+    "targets": {
+      "e2e": {
+        "executor": "@nx/jest:jest",
+        "outputs": [
+          "{projectRoot}/test-output/jest/coverage"
+        ],
+        "options": {
+          "jestConfig": "serviceA-e2e/jest.config.ts",
+          "passWithNoTests": true
+        },
+        "dependsOn": [
+          "@two-services/service-a:build",
+          "@two-services/service-a:serve"
+        ]
+      }
+    }
+  }
+}

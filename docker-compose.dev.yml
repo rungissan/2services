@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  servicea:
+    build:
+      context: .
+      dockerfile: serviceA/Dockerfile
+      target: development
+    container_name: two-services-servicea-dev
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+    volumes:
+      - ./serviceA/src:/app/two-services-servicea/src
+      - ./serviceA/package.json:/app/two-services-servicea/package.json
+    networks:
+      - microservices-network
+    depends_on:
+      - serviceb
+
+  serviceb:
+    build:
+      context: .
+      dockerfile: serviceB/Dockerfile
+      target: development
+    container_name: two-services-serviceb-dev
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+    volumes:
+      - ./serviceB/src:/app/two-services-serviceb/src
+      - ./serviceB/package.json:/app/two-services-serviceb/package.json
+    networks:
+      - microservices-network
+
+networks:
+  microservices-network:
+    driver: bridge

@@ -2,7 +2,25 @@
   "name": "@two-services/source",
   "version": "0.0.0",
   "license": "MIT",
-  "scripts": {},
+  "scripts": {
+    "dev:serviceA": "npx nx serve serviceA",
+    "dev:serviceB": "npx nx serve serviceB",
+    "build:all": "npx nx run-many -t build",
+    "build:serviceA": "npx nx build serviceA",
+    "build:serviceB": "npx nx build serviceB",
+    "test:all": "npx nx run-many -t test",
+    "test:serviceA": "npx nx test serviceA",
+    "test:serviceB": "npx nx test serviceB",
+    "lint:all": "npx nx run-many -t lint",
+    "docker:build": "npx nx docker-build serviceA && npx nx docker-build serviceB",
+    "docker:build:serviceA": "npx nx docker-build serviceA",
+    "docker:build:serviceB": "npx nx docker-build serviceB",
+    "docker:compose:up": "docker-compose up --build",
+    "docker:compose:up:detached": "docker-compose up -d --build",
+    "docker:compose:down": "docker-compose down",
+    "docker:compose:dev": "docker-compose -f docker-compose.dev.yml up --build",
+    "docker:compose:logs": "docker-compose logs -f"
+  },
   "private": true,
   "dependencies": {
     "@nestjs/common": "^11.0.0",
@@ -45,6 +63,9 @@
     "webpack-cli": "^5.1.4"
   },
   "workspaces": [
-    "apps/*"
+    "serviceA",
+    "serviceA-e2e",
+    "serviceB",
+    "serviceB-e2e"
   ]
 }
