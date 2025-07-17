@@ -1,0 +1,24 @@
+{
+  "entryPoints": ["./shared/index.ts"],
+  "out": "./docs/shared",
+  "tsconfig": "./shared/tsconfig.json",
+  "name": "Two Services - Shared Library",
+  "includeVersion": true,
+  "excludePrivate": true,
+  "excludeProtected": false,
+  "excludeExternals": true,
+  "hideGenerator": false,
+  "sort": ["source-order"],
+  "theme": "default",
+  "cleanOutputDir": true,
+  "categorizeByGroup": true,
+  "defaultCategory": "General",
+  "categoryOrder": [
+    "Configuration",
+    "Services",
+    "DTOs",
+    "Types",
+    "Utilities",
+    "General"
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "entryPoints": ["./serviceB/src/main.ts"],
+  "out": "./docs/serviceB",
+  "tsconfig": "./serviceB/tsconfig.docs.json", 
+  "readme": "./serviceB/README.md",
+  "name": "Two Services - Service B",
+  "includeVersion": true,
+  "excludePrivate": true,
+  "excludeProtected": false,
+  "excludeExternals": true,
+  "hideGenerator": false,
+  "sort": ["source-order"],
+  "theme": "default",
+  "cleanOutputDir": true,
+  "categorizeByGroup": true,
+  "defaultCategory": "General",
+  "categoryOrder": [
+    "Controllers",
+    "Services",
+    "DTOs",
+    "Types", 
+    "Utilities",
+    "General"
+  ]
+}

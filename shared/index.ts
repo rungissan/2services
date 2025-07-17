@@ -16,6 +16,7 @@ export * from './services/event-publisher.service';
 export * from './services/logger.service';
 export * from './services/mongo.service';
 export * from './services/redis.service';
+export * from './services/shared-services.module';
 
 // gRPC clients exports
 export * from './grpc-clients/pdf-generator.client';
