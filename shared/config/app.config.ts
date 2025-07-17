@@ -1,11 +1,13 @@
 import { getDatabaseConfig } from './database.config';
 
+export interface ServiceConfig {
+  name: string;
+  port: number;
+  environment: string;
+}
+
 export interface AppConfig {
-  service: {
-    name: string;
-    port: number;
-    environment: string;
-  };
+  service: ServiceConfig;
   database: ReturnType<typeof getDatabaseConfig>;
   redis: {
     channels: {
@@ -36,6 +38,7 @@ export interface AppConfig {
   };
 }
 
+// Base config shared across all services
 export const getBaseConfig = (): Omit<AppConfig, 'service'> => {
   return {
     database: getDatabaseConfig(),
@@ -62,15 +65,14 @@ export const getBaseConfig = (): Omit<AppConfig, 'service'> => {
       defaultFormat: process.env.PDF_DEFAULT_FORMAT || 'pdf'
     },
     logging: {
-      level: (['debug', 'info', 'warn', 'error'].includes(process.env.LOG_LEVEL || '')
-        ? process.env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error'
-        : 'info'),
+      level: (process.env.LOG_LEVEL as AppConfig['logging']['level']) || 'info',
       enableConsole: process.env.LOG_ENABLE_CONSOLE !== 'false',
       enableFile: process.env.LOG_ENABLE_FILE === 'true'
     }
   };
 };
 
+// Service-specific config factories
 export const getServiceAConfig = (): AppConfig => {
   return {
     service: {
@@ -87,6 +89,19 @@ export const getServiceBConfig = (): AppConfig => {
     service: {
       name: 'serviceB',
       port: parseInt(process.env.SERVICE_B_PORT || '3001'),
+      environment: process.env.NODE_ENV || 'development'
+    },
+    ...getBaseConfig()
+  };
+};
+
+// Generic service config factory
+export const getServiceConfig = (serviceName: string, defaultPort: number): AppConfig => {
+  const portEnvVar = `SERVICE_${serviceName.toUpperCase()}_PORT`;
+  return {
+    service: {
+      name: serviceName,
+      port: parseInt(process.env[portEnvVar] || defaultPort.toString()),
       environment: process.env.NODE_ENV || 'development'
     },
     ...getBaseConfig()

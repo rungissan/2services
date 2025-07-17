@@ -11,6 +11,7 @@ export * from './types/common.types';
 export * from './types/database.types';
 
 // Services exports
+export * from './services/client-manager.service';
 export * from './services/event-publisher.service';
 export * from './services/logger.service';
 export * from './services/mongo.service';

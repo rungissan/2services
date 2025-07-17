@@ -68,6 +68,82 @@ This project contains a complete microservices architecture with NestJS services
 - **Features**: Chart generation, statistical analysis, PDF creation
 - **Language**: Go 1.21+
 
+## Configuration Architecture
+
+This project implements a **centralized configuration system** that eliminates duplication and provides consistent configuration across all services.
+
+### Key Features
+
+- **🏗️ Single Source of Truth**: All configuration is centralized in the `shared/config/` directory
+- **🎯 Service-Specific Factories**: `getServiceAConfig()`, `getServiceBConfig()`, `getBaseConfig()`
+- **🔧 Unified Client Management**: Centralized MongoDB and Redis client lifecycle management
+- **🔗 Backward Compatibility**: Existing service code continues to work without changes
+- **✅ Type Safety**: Full TypeScript interfaces and validation
+- **🛡️ Environment Overrides**: Easy environment-specific configuration
+
+### Configuration Structure
+
+```typescript
+// Centralized config factories
+import { getServiceAConfig, getServiceBConfig, getBaseConfig } from '@two-services/shared';
+
+// Service-specific configuration
+const serviceAConfig = getServiceAConfig();
+const serviceBConfig = getServiceBConfig();
+
+// Shared base configuration
+const baseConfig = getBaseConfig();
+```
+
+### Service Configuration Files
+
+Each service has a lightweight configuration wrapper that maintains backward compatibility:
+
+```typescript
+// serviceA/src/app/utils/config.util.ts
+import { getServiceAConfig } from '@two-services/shared';
+
+const centralizedConfig = getServiceAConfig();
+
+export const config = {
+  // Legacy format for backward compatibility
+  mongodb: {
+    uri: centralizedConfig.database.mongodb.connectionString,
+    dbName: centralizedConfig.database.mongodb.database
+  },
+  redis: {
+    host: centralizedConfig.database.redis.host,
+    port: centralizedConfig.database.redis.port,
+    channels: centralizedConfig.redis.channels
+  },
+  // Service-specific configurations
+  upload: centralizedConfig.upload,
+  dataFetcher: centralizedConfig.dataFetcher,
+  service: centralizedConfig.service
+};
+```
+
+### Client Management
+
+The `ClientManagerService` provides centralized lifecycle management for database connections:
+
+```typescript
+import { ClientManagerService } from '@two-services/shared';
+
+// Automatic connection management with health checks
+// Proper cleanup to prevent test hanging
+// Unified configuration across all services
+```
+
+### Benefits
+
+- **No Configuration Duplication**: Same settings shared across services
+- **Centralized Updates**: Change once, apply everywhere
+- **Test Reliability**: Proper client cleanup prevents hanging tests
+- **Environment Flexibility**: Easy environment-specific overrides
+- **Type Safety**: TypeScript interfaces prevent configuration errors
+- **Maintainability**: Single place to manage all service configurations
+
 ## Prerequisites
 
 - Node.js (v18 or higher)
@@ -147,13 +223,17 @@ two-services/
 │   │   └── support/           # Test support files
 │   └── package.json
 ├── shared/                     # Shared libraries and utilities
-│   ├── config/                # Configuration files
-│   │   ├── app.config.ts
-│   │   └── database.config.ts
+│   ├── config/                # Centralized configuration system
+│   │   ├── app.config.ts      # Service-specific config factories
+│   │   └── database.config.ts # Database connection configuration
+│   ├── dto/                   # Data transfer objects
+│   │   ├── base.dto.ts
+│   │   └── common.dto.ts
 │   ├── grpc-clients/          # gRPC client implementations
 │   │   ├── pdf-generator.client.ts
 │   │   └── pdf_generator.proto
 │   ├── services/              # Shared services
+│   │   ├── client-manager.service.ts    # Centralized client lifecycle
 │   │   ├── event-publisher.service.ts
 │   │   ├── logger.service.ts
 │   │   ├── mongo.service.ts
@@ -455,6 +535,20 @@ curl -X GET http://localhost:3002/reports/status/report_1640995200000
 
 ## Data Services Integration
 
+### Centralized Configuration Usage
+
+```typescript
+// Using centralized configuration in services
+import { getServiceAConfig, MongoService, RedisService } from '@two-services/shared';
+
+// Get service-specific configuration
+const config = getServiceAConfig();
+
+// Configuration is automatically applied to shared services
+const mongoService = new MongoService();
+const redisService = new RedisService();
+```
+
 ### MongoDB Operations
 ```typescript
 // Example usage in services
@@ -486,6 +580,26 @@ await this.redisService.subscribe('user-events', (message) => {
   console.log('Received:', message);
 });
 ```
+
+### Client Lifecycle Management
+```typescript
+// Centralized client management
+import { ClientManagerService } from '@two-services/shared';
+
+@Injectable()
+export class AppModule implements OnModuleInit, OnModuleDestroy {
+  constructor(private clientManager: ClientManagerService) {}
+
+  async onModuleInit() {
+    // Clients are automatically initialized with centralized config
+    await this.clientManager.onModuleInit();
+  }
+
+  async onModuleDestroy() {
+    // Proper cleanup prevents test hanging
+    await this.clientManager.onModuleDestroy();
+  }
+}
 
 ### Time Series Operations
 ```typescript
@@ -528,29 +642,73 @@ All services include health checks that can be monitored:
 
 ## Environment Variables
 
-### ServiceA
-- `NODE_ENV`: Environment mode (development/production)
-- `PORT`: Port number (default: 3001)
-- `HOST`: Host address (default: 0.0.0.0)
-- `MONGODB_URI`: MongoDB connection string
-- `REDIS_URL`: Redis connection string
-- `REDIS_TIMESERIES_URL`: Redis TimeSeries connection string
-- `REDIS_PUBSUB_URL`: Redis Pub/Sub connection string
+The centralized configuration system automatically reads environment variables and applies them across all services. This ensures consistent configuration without duplication.
 
-### ServiceB
+### Shared Configuration Variables
+These variables are used by the centralized configuration system:
+
+#### Database Configuration
+- `MONGODB_HOST`: MongoDB host (default: localhost)
+- `MONGODB_PORT`: MongoDB port (default: 27017)
+- `MONGODB_USERNAME`: MongoDB username (default: app-user)
+- `MONGODB_PASSWORD`: MongoDB password (default: app-password)
+- `MONGODB_DATABASE`: MongoDB database name (default: two-services)
+- `MONGODB_AUTH_SOURCE`: MongoDB auth source (default: admin)
+
+#### Redis Configuration
+- `REDIS_HOST`: Redis host (default: localhost)
+- `REDIS_PORT`: Redis port (default: 6379)
+- `REDIS_PASSWORD`: Redis password (default: password)
+- `REDIS_DB`: Redis database number (default: 0)
+
+#### Redis TimeSeries Configuration
+- `REDIS_TIMESERIES_HOST`: Redis TimeSeries host (default: localhost)
+- `REDIS_TIMESERIES_PORT`: Redis TimeSeries port (default: 6380)
+- `REDIS_TIMESERIES_PASSWORD`: Redis TimeSeries password (default: password)
+- `REDIS_TIMESERIES_DB`: Redis TimeSeries database number (default: 0)
+
+#### Redis Pub/Sub Configuration
+- `REDIS_PUBSUB_HOST`: Redis Pub/Sub host (default: localhost)
+- `REDIS_PUBSUB_PORT`: Redis Pub/Sub port (default: 6381)
+- `REDIS_PUBSUB_PASSWORD`: Redis Pub/Sub password (default: password)
+- `REDIS_PUBSUB_DB`: Redis Pub/Sub database number (default: 0)
+
+### Service-Specific Variables
+
+#### ServiceA
 - `NODE_ENV`: Environment mode (development/production)
-- `PORT`: Port number (default: 3002)
-- `HOST`: Host address (default: 0.0.0.0)
-- `MONGODB_URI`: MongoDB connection string
-- `REDIS_URL`: Redis connection string
-- `REDIS_TIMESERIES_URL`: Redis TimeSeries connection string
-- `REDIS_PUBSUB_URL`: Redis Pub/Sub connection string
+- `SERVICEA_PORT`: Port number (default: 3001)
+- `SERVICEA_HOST`: Host address (default: 0.0.0.0)
+- `SERVICEA_NAME`: Service name (default: serviceA)
+
+#### ServiceB
+- `NODE_ENV`: Environment mode (development/production)
+- `SERVICEB_PORT`: Port number (default: 3002)
+- `SERVICEB_HOST`: Host address (default: 0.0.0.0)
+- `SERVICEB_NAME`: Service name (default: serviceB)
 - `PDF_GENERATOR_ADDR`: PDF generator gRPC address (default: localhost:50051)
 
 ### PDF Generator
 - `GRPC_PORT`: gRPC server port (default: 50051)
 - `REDIS_TIMESERIES_ADDR`: Redis TimeSeries address (default: localhost:6380)
 - `REDIS_PASSWORD`: Redis password (default: password)
+
+### Configuration Override Examples
+
+```bash
+# Override MongoDB settings
+export MONGODB_HOST=production-mongo.example.com
+export MONGODB_USERNAME=prod-user
+export MONGODB_PASSWORD=secure-password
+
+# Override Redis settings
+export REDIS_HOST=redis-cluster.example.com
+export REDIS_PASSWORD=redis-secure-password
+
+# Override service ports
+export SERVICEA_PORT=4001
+export SERVICEB_PORT=4002
+```
 
 ## Useful Commands
 
@@ -750,6 +908,35 @@ docker-compose ps
 6. Update shared types and interfaces when needed
 7. Follow TypeScript and Go best practices
 
+## Architecture Improvements
+
+### Recent Enhancements
+
+#### Centralized Configuration System (v2.0)
+- **Problem Solved**: Eliminated configuration duplication across services
+- **Implementation**: Created centralized config factories in `shared/config/`
+- **Benefits**: Single source of truth, type safety, environment flexibility
+- **Backward Compatibility**: Existing service code works without changes
+
+#### Unified Client Management
+- **Problem Solved**: Inconsistent client lifecycle management causing test issues
+- **Implementation**: `ClientManagerService` with proper initialization and cleanup
+- **Benefits**: Prevents test hanging, unified connection management, health checks
+
+#### Test Reliability Improvements
+- **Problem Solved**: Tests hanging due to open database connections
+- **Implementation**: Proper client cleanup with `forceExit` configuration
+- **Benefits**: Reliable CI/CD pipeline, faster test execution
+
+### Architectural Principles
+
+1. **Single Source of Truth**: Configuration defined once, used everywhere
+2. **Type Safety**: Full TypeScript interfaces prevent configuration errors
+3. **Separation of Concerns**: Clear boundaries between services and shared logic
+4. **Backward Compatibility**: Changes don't break existing functionality
+5. **Test Reliability**: Proper resource cleanup ensures stable testing
+6. **Environment Flexibility**: Easy configuration overrides for different environments
+
 ## Additional Documentation
 
 - **PDF Generator Implementation**: See `PDF_GENERATOR_IMPLEMENTATION.md`
@@ -763,6 +950,12 @@ docker-compose ps
 - **NestJS**: Node.js framework for building efficient server-side applications
 - **Go**: For high-performance PDF generation service
 - **TypeScript**: Type-safe JavaScript development
+
+### Architecture
+- **Centralized Configuration**: Single source of truth for all service configurations
+- **Shared Libraries**: Common utilities and services across microservices
+- **Client Lifecycle Management**: Unified database connection management
+- **Nx Monorepo**: Build system and workspace management
 
 ### Databases
 - **MongoDB**: NoSQL document database
