@@ -1,7 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
+import { PaginatedResponseDto, PaginationDto } from '@two-services/shared';
+import { IsOptional, IsString } from 'class-validator';
 
-export class SearchQueryDto {
+export class SearchQueryDto extends PaginationDto {
   @ApiProperty({
     description: 'Search query string',
     example: 'temperature',
@@ -10,53 +11,8 @@ export class SearchQueryDto {
   @IsOptional()
   @IsString()
   query?: string;
-
-  @ApiProperty({
-    description: 'Page number for pagination',
-    example: 1,
-    default: 1,
-    required: false,
-  })
-  @IsOptional()
-  @IsNumber()
-  @Min(1)
-  page?: number;
-
-  @ApiProperty({
-    description: 'Number of items per page',
-    example: 10,
-    default: 10,
-    required: false,
-  })
-  @IsOptional()
-  @IsNumber()
-  @Min(1)
-  @Max(100)
-  limit?: number;
 }
 
-export class SearchResponseDto {
-  @ApiProperty({
-    description: 'Array of search results',
-    isArray: true,
-  })
-  data!: Record<string, unknown>[];
-
-  @ApiProperty({
-    description: 'Total number of results',
-    example: 150,
-  })
-  total!: number;
-
-  @ApiProperty({
-    description: 'Current page number',
-    example: 1,
-  })
-  page!: number;
-
-  @ApiProperty({
-    description: 'Number of items per page',
-    example: 10,
-  })
-  limit!: number;
+export class SearchResponseDto extends PaginatedResponseDto<Record<string, unknown>> {
+  // Inherits data, total, page, limit from PaginatedResponseDto
 }

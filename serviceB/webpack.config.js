@@ -5,6 +5,11 @@ module.exports = {
   output: {
     path: join(__dirname, 'dist'),
   },
+  resolve: {
+    alias: {
+      '@two-services/shared': join(__dirname, '../shared/dist/index.js'),
+    },
+  },
   plugins: [
     new NxAppWebpackPlugin({
       target: 'node',

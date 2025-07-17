@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { RedisService } from '@two-services/shared';
 import Redis from 'ioredis';
 import { EventPublisherService } from './event-publisher.service';
 
@@ -8,7 +9,10 @@ const MockedRedis = Redis as jest.MockedClass<typeof Redis>;
 
 describe('EventPublisherService', () => {
   let service: EventPublisherService;
+  let mockRedisService: jest.Mocked<RedisService>;
   let mockRedisClient: jest.Mocked<Pick<Redis, 'publish' | 'disconnect'>>;
+  let consoleLogSpy: jest.SpyInstance;
+  let consoleErrorSpy: jest.SpyInstance;
 
   beforeEach(async () => {
     mockRedisClient = {
@@ -18,15 +22,34 @@ describe('EventPublisherService', () => {
 
     MockedRedis.mockImplementation(() => mockRedisClient as unknown as Redis);
 
+    mockRedisService = {
+      publish: jest.fn(),
+      subscribe: jest.fn(),
+      unsubscribe: jest.fn(),
+      disconnect: jest.fn(),
+    } as unknown as jest.Mocked<RedisService>;
+
     const module: TestingModule = await Test.createTestingModule({
-      providers: [EventPublisherService],
+      providers: [
+        EventPublisherService,
+        {
+          provide: RedisService,
+          useValue: mockRedisService,
+        },
+      ],
     }).compile();
 
     service = module.get<EventPublisherService>(EventPublisherService);
+
+    // Suppress console output during tests
+    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
   });
 
   afterEach(() => {
     jest.clearAllMocks();
+    consoleLogSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
   });
 
   describe('publishFileUploadEvent', () => {
@@ -42,11 +65,11 @@ describe('EventPublisherService', () => {
 
       await service.publishFileUploadEvent(eventData);
 
-      expect(mockRedisClient.publish).toHaveBeenCalledWith(
+      expect(mockRedisService.publish).toHaveBeenCalledWith(
         'file-upload',
         expect.stringContaining('"eventType":"file-upload"')
       );
-      expect(mockRedisClient.publish).toHaveBeenCalledWith(
+      expect(mockRedisService.publish).toHaveBeenCalledWith(
         'file-upload',
         expect.stringContaining('"filename":"test.json"')
       );
@@ -64,7 +87,7 @@ describe('EventPublisherService', () => {
 
       await service.publishFileUploadEvent(eventData);
 
-      const publishedData = String(mockRedisClient.publish.mock.calls[0][1]);
+      const publishedData = String(mockRedisService.publish.mock.calls[0][1]);
       const parsedData = JSON.parse(publishedData);
       expect(parsedData.timestamp).toBeDefined();
       expect(new Date(parsedData.timestamp)).toBeInstanceOf(Date);
@@ -80,7 +103,7 @@ describe('EventPublisherService', () => {
         data: { uploaded: true },
       };
 
-      mockRedisClient.publish.mockRejectedValue(new Error('Redis error'));
+      mockRedisService.publish.mockRejectedValue(new Error('Redis error'));
 
       await expect(service.publishFileUploadEvent(eventData)).rejects.toThrow('Redis error');
     });
@@ -98,11 +121,11 @@ describe('EventPublisherService', () => {
 
       await service.publishDataFetchEvent(eventData);
 
-      expect(mockRedisClient.publish).toHaveBeenCalledWith(
+      expect(mockRedisService.publish).toHaveBeenCalledWith(
         'data-fetch',
         expect.stringContaining('"eventType":"data-fetch"')
       );
-      expect(mockRedisClient.publish).toHaveBeenCalledWith(
+      expect(mockRedisService.publish).toHaveBeenCalledWith(
         'data-fetch',
         expect.stringContaining('"status":"success"')
       );
@@ -119,7 +142,7 @@ describe('EventPublisherService', () => {
 
       await service.publishDataFetchEvent(eventData);
 
-      const publishedData = String(mockRedisClient.publish.mock.calls[0][1]);
+      const publishedData = String(mockRedisService.publish.mock.calls[0][1]);
       const parsedData = JSON.parse(publishedData);
       expect(parsedData.status).toBe('error');
       expect(parsedData.errorMessage).toBe('Failed to fetch data');
@@ -138,11 +161,11 @@ describe('EventPublisherService', () => {
 
       await service.publishSearchQueryEvent(eventData);
 
-      expect(mockRedisClient.publish).toHaveBeenCalledWith(
+      expect(mockRedisService.publish).toHaveBeenCalledWith(
         'search-query',
         expect.stringContaining('"eventType":"search-query"')
       );
-      expect(mockRedisClient.publish).toHaveBeenCalledWith(
+      expect(mockRedisService.publish).toHaveBeenCalledWith(
         'search-query',
         expect.stringContaining('"query":"search term"')
       );
@@ -159,17 +182,10 @@ describe('EventPublisherService', () => {
 
       await service.publishSearchQueryEvent(eventData);
 
-      const publishedData = String(mockRedisClient.publish.mock.calls[0][1]);
+      const publishedData = String(mockRedisService.publish.mock.calls[0][1]);
       const parsedData = JSON.parse(publishedData);
       expect(parsedData.resultsCount).toBe(42);
       expect(parsedData.executionTime).toBe(150);
-    });
-  });
-
-  describe('onModuleDestroy', () => {
-    it('should disconnect Redis client on module destroy', async () => {
-      await service.onModuleDestroy();
-      expect(mockRedisClient.disconnect).toHaveBeenCalled();
     });
   });
 });

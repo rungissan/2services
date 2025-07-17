@@ -1,1 +1,1 @@
-export * from './common-types';
+export * from '@two-services/shared';

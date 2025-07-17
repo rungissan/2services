@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { BaseResponseDto } from '@two-services/shared';
 import { IsOptional, IsString } from 'class-validator';
 
 export class FetchDataDto {
@@ -12,19 +13,7 @@ export class FetchDataDto {
   url?: string;
 }
 
-export class FetchDataResponseDto {
-  @ApiProperty({
-    description: 'Success message',
-    example: 'Data fetched and saved successfully',
-  })
-  message!: string;
-
-  @ApiProperty({
-    description: 'Timestamp of the operation',
-    example: '2025-07-16T10:30:00Z',
-  })
-  timestamp!: string;
-
+export class FetchDataResponseDto extends BaseResponseDto {
   @ApiProperty({
     description: 'Number of records processed',
     example: 150,

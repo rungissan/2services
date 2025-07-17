@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { BaseResponseDto } from '@two-services/shared';
 
 export class UploadFileDto {
   @ApiProperty({
@@ -9,13 +10,7 @@ export class UploadFileDto {
   file!: Express.Multer.File;
 }
 
-export class UploadFileResponseDto {
-  @ApiProperty({
-    description: 'Success message',
-    example: 'File uploaded and processed successfully',
-  })
-  message!: string;
-
+export class UploadFileResponseDto extends BaseResponseDto {
   @ApiProperty({
     description: 'Original filename',
     example: 'data.xlsx',

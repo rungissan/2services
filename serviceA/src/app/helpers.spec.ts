@@ -1,4 +1,4 @@
-import { ApiResponseHelper, DateHelper, ErrorHelper, PaginationHelper, ValidationHelper } from './helpers';
+import { ApiResponseHelper, DateHelper, ErrorHelper, PaginationHelper, ValidationHelper } from '@two-services/shared';
 
 describe('ApiResponseHelper', () => {
   describe('success', () => {

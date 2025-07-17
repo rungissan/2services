@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { ReportRequest } from './common-types';
+import { ReportRequest } from '@two-services/shared';
 import { LogsController, ReportsController } from './controllers';
 import { LoggingService } from './logging.service';
 import { PdfReportService } from './pdf-report.service';

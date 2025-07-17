@@ -2,6 +2,10 @@
 export * from './config/app.config';
 export * from './config/database.config';
 
+// DTO exports
+export * from './dto/base.dto';
+export * from './dto/common.dto';
+
 // Types exports
 export * from './types/common.types';
 export * from './types/database.types';

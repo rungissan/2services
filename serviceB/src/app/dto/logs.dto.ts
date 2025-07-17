@@ -1,7 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsDateString, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
+import { DateRangeDto, PaginatedResponseDto, PaginationDto } from '@two-services/shared';
+import { IsOptional, IsString } from 'class-validator';
 
-export class LogQueryDto {
+export class LogQueryDto extends PaginationDto {
   @ApiProperty({
     description: 'Event type to filter by',
     example: 'upload_complete',
@@ -17,7 +18,7 @@ export class LogQueryDto {
     required: false,
   })
   @IsOptional()
-  @IsDateString()
+  @IsString()
   startDate?: string;
 
   @ApiProperty({
@@ -26,7 +27,7 @@ export class LogQueryDto {
     required: false,
   })
   @IsOptional()
-  @IsDateString()
+  @IsString()
   endDate?: string;
 
   @ApiProperty({
@@ -46,72 +47,13 @@ export class LogQueryDto {
   @IsOptional()
   @IsString()
   filename?: string;
-
-  @ApiProperty({
-    description: 'Page number for pagination',
-    example: 1,
-    default: 1,
-    required: false,
-  })
-  @IsOptional()
-  @IsNumber()
-  @Min(1)
-  page?: number;
-
-  @ApiProperty({
-    description: 'Number of items per page',
-    example: 10,
-    default: 10,
-    required: false,
-  })
-  @IsOptional()
-  @IsNumber()
-  @Min(1)
-  @Max(100)
-  limit?: number;
 }
 
-export class LogResponseDto {
-  @ApiProperty({
-    description: 'Array of log entries',
-    isArray: true,
-  })
-  data!: Record<string, unknown>[];
-
-  @ApiProperty({
-    description: 'Total number of log entries',
-    example: 50,
-  })
-  total!: number;
-
-  @ApiProperty({
-    description: 'Current page number',
-    example: 1,
-  })
-  page!: number;
-
-  @ApiProperty({
-    description: 'Number of items per page',
-    example: 10,
-  })
-  limit!: number;
+export class LogResponseDto extends PaginatedResponseDto<Record<string, unknown>> {
+  // Inherits data, total, page, limit from PaginatedResponseDto
 }
 
-export class ReportGenerationDto {
-  @ApiProperty({
-    description: 'Start date for report (ISO string)',
-    example: '2025-07-16T00:00:00Z',
-  })
-  @IsDateString()
-  startDate!: string;
-
-  @ApiProperty({
-    description: 'End date for report (ISO string)',
-    example: '2025-07-16T23:59:59Z',
-  })
-  @IsDateString()
-  endDate!: string;
-
+export class ReportGenerationDto extends DateRangeDto {
   @ApiProperty({
     description: 'Report type',
     example: 'temperature_summary',
