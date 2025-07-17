@@ -1,39 +1,26 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { Collection, Db, MongoClient } from 'mongodb';
+import { MongoService } from '@two-services/shared';
 import { LoggingService } from './logging.service';
-
-// Mock MongoDB
-jest.mock('mongodb');
-const MockedMongoClient = MongoClient as jest.MockedClass<typeof MongoClient>;
 
 describe('LoggingService', () => {
   let service: LoggingService;
-  let mockClient: jest.Mocked<MongoClient>;
-  let mockDb: jest.Mocked<Db>;
-  let mockCollection: jest.Mocked<Pick<Collection, 'insertOne' | 'find' | 'countDocuments' | 'createIndex'>>;
+  let mockMongoService: jest.Mocked<MongoService>;
 
   beforeEach(async () => {
-    mockCollection = {
+    // Create a mock MongoService
+    mockMongoService = {
       insertOne: jest.fn(),
-      find: jest.fn(),
-      countDocuments: jest.fn(),
-      createIndex: jest.fn(),
-    };
-
-    mockDb = {
-      collection: jest.fn().mockReturnValue(mockCollection),
-    } as unknown as jest.Mocked<Db>;
-
-    mockClient = {
-      connect: jest.fn(),
-      close: jest.fn(),
-      db: jest.fn().mockReturnValue(mockDb),
-    } as unknown as jest.Mocked<MongoClient>;
-
-    MockedMongoClient.mockImplementation(() => mockClient);
+      findMany: jest.fn(),
+      count: jest.fn(),
+      onModuleInit: jest.fn(),
+      onModuleDestroy: jest.fn(),
+    } as unknown as jest.Mocked<MongoService>;
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [LoggingService],
+      providers: [
+        LoggingService,
+        { provide: MongoService, useValue: mockMongoService },
+      ],
     }).compile();
 
     service = module.get<LoggingService>(LoggingService);
@@ -44,23 +31,30 @@ describe('LoggingService', () => {
   });
 
   describe('onModuleInit', () => {
-    it('should connect to MongoDB and create indexes', async () => {
+    it('should initialize the service', async () => {
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+
       await service.onModuleInit();
 
-      expect(mockClient.connect).toHaveBeenCalled();
-      expect(mockCollection.createIndex).toHaveBeenCalledWith({ timestamp: -1 });
-      expect(mockCollection.createIndex).toHaveBeenCalledWith({ eventType: 1 });
-      expect(mockCollection.createIndex).toHaveBeenCalledWith({ source: 1 });
-      expect(mockCollection.createIndex).toHaveBeenCalledWith({ filename: 1 });
-      expect(mockCollection.createIndex).toHaveBeenCalledWith({ eventType: 1, timestamp: -1 });
+      expect(consoleSpy).toHaveBeenCalledWith('LoggingService initialized');
+
+      consoleSpy.mockRestore();
+    });
+  });
+
+  describe('onModuleDestroy', () => {
+    it('should destroy the service', async () => {
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+
+      await service.onModuleDestroy();
+
+      expect(consoleSpy).toHaveBeenCalledWith('LoggingService destroyed');
+
+      consoleSpy.mockRestore();
     });
   });
 
   describe('logEvent', () => {
-    beforeEach(async () => {
-      await service.onModuleInit();
-    });
-
     it('should insert event into MongoDB', async () => {
       const logEvent = {
         eventType: 'file-upload',
@@ -71,9 +65,14 @@ describe('LoggingService', () => {
         data: { uploaded: true },
       };
 
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+
       await service.logEvent(logEvent);
 
-      expect(mockCollection.insertOne).toHaveBeenCalledWith(logEvent);
+      expect(mockMongoService.insertOne).toHaveBeenCalledWith('events', logEvent);
+      expect(consoleSpy).toHaveBeenCalledWith(`Logged event: ${logEvent.eventType} from ${logEvent.source}`);
+
+      consoleSpy.mockRestore();
     });
 
     it('should handle insertion errors', async () => {
@@ -84,133 +83,133 @@ describe('LoggingService', () => {
         metadata: { test: 'data' },
       };
 
-      mockCollection.insertOne.mockRejectedValue(new Error('Database error'));
+      const error = new Error('Database error');
+      mockMongoService.insertOne.mockRejectedValue(error);
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
 
       await expect(service.logEvent(logEvent)).rejects.toThrow('Database error');
+      expect(consoleErrorSpy).toHaveBeenCalledWith('Error logging event:', error);
+
+      consoleErrorSpy.mockRestore();
     });
   });
 
   describe('queryLogs', () => {
-    beforeEach(async () => {
-      await service.onModuleInit();
-    });
-
     it('should query logs with default parameters', async () => {
-      const mockFind = {
-        sort: jest.fn().mockReturnThis(),
-        skip: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnThis(),
-        toArray: jest.fn().mockResolvedValue([]),
-      };
+      const mockEvents = [
+        { eventType: 'file-upload', source: 'serviceA', timestamp: new Date() }
+      ];
+      const mockTotal = 1;
 
-      mockCollection.find.mockReturnValue(mockFind as unknown as ReturnType<Collection['find']>);
-      mockCollection.countDocuments.mockResolvedValue(0);
+      mockMongoService.findMany.mockResolvedValue(mockEvents);
+      mockMongoService.count.mockResolvedValue(mockTotal);
 
       const result = await service.queryLogs({});
 
-      expect(mockCollection.find).toHaveBeenCalledWith({});
-      expect(mockFind.sort).toHaveBeenCalledWith({ timestamp: -1 });
-      expect(mockFind.skip).toHaveBeenCalledWith(0);
-      expect(mockFind.limit).toHaveBeenCalledWith(100);
+      expect(mockMongoService.findMany).toHaveBeenCalledWith('events', {}, {
+        sort: { timestamp: -1 },
+        skip: 0,
+        limit: 100
+      });
+      expect(mockMongoService.count).toHaveBeenCalledWith('events', {});
       expect(result).toEqual({
-        events: [],
-        total: 0,
+        events: mockEvents,
+        total: mockTotal,
         page: 1,
         limit: 100,
-        totalPages: 0,
+        totalPages: 1
       });
     });
 
     it('should query logs with filters', async () => {
-      const mockFind = {
-        sort: jest.fn().mockReturnThis(),
-        skip: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnThis(),
-        toArray: jest.fn().mockResolvedValue([]),
+      const mockEvents = [
+        { eventType: 'file-upload', source: 'serviceA', timestamp: new Date() }
+      ];
+      const mockTotal = 1;
+
+      mockMongoService.findMany.mockResolvedValue(mockEvents);
+      mockMongoService.count.mockResolvedValue(mockTotal);
+
+      const query = {
+        eventType: 'file-upload',
+        source: 'serviceA',
+        page: 2,
+        limit: 5,
+        sortBy: 'eventType',
+        sortOrder: 'asc' as const
       };
 
-      mockCollection.find.mockReturnValue(mockFind as unknown as ReturnType<Collection['find']>);
-      mockCollection.countDocuments.mockResolvedValue(0);
+      const result = await service.queryLogs(query);
 
-      const startDate = new Date('2023-01-01');
-      const endDate = new Date('2023-01-02');
-
-      await service.queryLogs({
+      expect(mockMongoService.findMany).toHaveBeenCalledWith('events', {
         eventType: 'file-upload',
-        source: 'serviceA',
-        startDate,
-        endDate,
+        source: 'serviceA'
+      }, {
+        sort: { eventType: 1 },
+        skip: 5,
+        limit: 5
+      });
+      expect(mockMongoService.count).toHaveBeenCalledWith('events', {
+        eventType: 'file-upload',
+        source: 'serviceA'
+      });
+      expect(result).toEqual({
+        events: mockEvents,
+        total: mockTotal,
         page: 2,
-        limit: 50,
+        limit: 5,
+        totalPages: 1
       });
-
-      expect(mockCollection.find).toHaveBeenCalledWith({
-        eventType: 'file-upload',
-        source: 'serviceA',
-        timestamp: {
-          $gte: startDate,
-          $lte: endDate,
-        },
-      });
-      expect(mockFind.skip).toHaveBeenCalledWith(50);
-      expect(mockFind.limit).toHaveBeenCalledWith(50);
     });
 
     it('should handle query errors', async () => {
-      mockCollection.find.mockImplementation(() => {
-        throw new Error('Query error');
-      });
+      const error = new Error('Query error');
+      mockMongoService.findMany.mockRejectedValue(error);
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
 
       await expect(service.queryLogs({})).rejects.toThrow('Query error');
+      expect(consoleErrorSpy).toHaveBeenCalledWith('Error querying logs:', error);
+
+      consoleErrorSpy.mockRestore();
     });
   });
 
   describe('getEventsByDateRange', () => {
-    beforeEach(async () => {
-      await service.onModuleInit();
-    });
-
     it('should get events by date range', async () => {
-      const mockFind = {
-        sort: jest.fn().mockReturnThis(),
-        toArray: jest.fn().mockResolvedValue([]),
-      };
+      const startDate = new Date('2024-01-01');
+      const endDate = new Date('2024-01-31');
+      const mockEvents = [
+        { eventType: 'file-upload', source: 'serviceA', timestamp: new Date('2024-01-15') }
+      ];
 
-      mockCollection.find.mockReturnValue(mockFind as unknown as ReturnType<Collection['find']>);
+      mockMongoService.findMany.mockResolvedValue(mockEvents);
 
-      const startDate = new Date('2023-01-01');
-      const endDate = new Date('2023-01-02');
+      const result = await service.getEventsByDateRange(startDate, endDate);
 
-      await service.getEventsByDateRange(startDate, endDate);
-
-      expect(mockCollection.find).toHaveBeenCalledWith({
+      expect(mockMongoService.findMany).toHaveBeenCalledWith('events', {
         timestamp: {
           $gte: startDate,
-          $lte: endDate,
-        },
+          $lte: endDate
+        }
+      }, {
+        sort: { timestamp: -1 }
       });
-      expect(mockFind.sort).toHaveBeenCalledWith({ timestamp: -1 });
+      expect(result).toEqual(mockEvents);
     });
 
     it('should handle date range query errors', async () => {
-      mockCollection.find.mockImplementation(() => {
-        throw new Error('Date range query error');
-      });
+      const startDate = new Date('2024-01-01');
+      const endDate = new Date('2024-01-31');
+      const error = new Error('Date range query error');
 
-      const startDate = new Date('2023-01-01');
-      const endDate = new Date('2023-01-02');
+      mockMongoService.findMany.mockRejectedValue(error);
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
 
       await expect(service.getEventsByDateRange(startDate, endDate))
         .rejects.toThrow('Date range query error');
-    });
-  });
+      expect(consoleErrorSpy).toHaveBeenCalledWith('Error getting events by date range:', error);
 
-  describe('onModuleDestroy', () => {
-    it('should close MongoDB connection', async () => {
-      await service.onModuleInit();
-      await service.onModuleDestroy();
-
-      expect(mockClient.close).toHaveBeenCalled();
+      consoleErrorSpy.mockRestore();
     });
   });
 });

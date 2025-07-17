@@ -2,8 +2,8 @@ import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ReportRequest } from '@two-services/shared';
 import { LogsController, ReportsController } from './controllers';
-import { LoggingService } from './logging.service';
-import { PdfReportService } from './pdf-report.service';
+import { LoggingService } from './services/logging.service';
+import { PdfReportService } from './services/pdf-report.service';
 
 describe('LogsController', () => {
   let controller: LogsController;
@@ -49,8 +49,8 @@ describe('LogsController', () => {
         endDate: undefined,
         source: undefined,
         filename: undefined,
-        page: undefined,
-        limit: undefined,
+        page: 1,
+        limit: 10,
         sortBy: undefined,
         sortOrder: undefined,
       });
