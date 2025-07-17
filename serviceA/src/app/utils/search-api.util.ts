@@ -1,10 +1,10 @@
 import { MongoClient } from 'mongodb';
-import { config } from './config';
-import { Metric, SearchQuery, SearchResult } from './types';
+import { Metric, SearchQuery, SearchResult } from '../types';
+import { config } from './config.util';
 
 export async function searchMetrics(query: SearchQuery): Promise<SearchResult> {
   const client = new MongoClient(config.mongodb.uri);
-  
+
   try {
     await client.connect();
     const db = client.db(config.mongodb.dbName);
@@ -12,12 +12,12 @@ export async function searchMetrics(query: SearchQuery): Promise<SearchResult> {
 
     // Build MongoDB query
     const mongoQuery: Record<string, unknown> = {};
-    
+
     // Text search
     if (query.q) {
       mongoQuery.$text = { $search: query.q };
     }
-    
+
     // Apply filters
     if (query.filter) {
       Object.assign(mongoQuery, query.filter);
@@ -38,7 +38,7 @@ export async function searchMetrics(query: SearchQuery): Promise<SearchResult> {
 
     const results = await cursor.toArray();
     const hasMore = results.length > limit;
-    
+
     if (hasMore) {
       results.pop(); // Remove the extra result
     }
@@ -67,7 +67,7 @@ export async function searchMetrics(query: SearchQuery): Promise<SearchResult> {
 
 export async function ensureTextIndex(): Promise<void> {
   const client = new MongoClient(config.mongodb.uri);
-  
+
   try {
     await client.connect();
     const db = client.db(config.mongodb.dbName);

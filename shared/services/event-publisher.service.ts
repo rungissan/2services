@@ -2,6 +2,13 @@ import { getBaseConfig } from '../config/app.config';
 import { RedisService } from '../services/redis.service';
 import { DataFetchEvent, FileUploadEvent, RedisEvent, SearchQueryEvent } from '../types/common.types';
 
+/**
+ * Shared EventPublisher for standardized cross-service events
+ * This handles common event types: file uploads, data fetches, and search queries
+ *
+ * For service-specific events or metrics with TimeSeries support,
+ * use the service-specific EventPublisher implementations
+ */
 export class EventPublisher {
   private redisService: RedisService;
   private config = getBaseConfig();

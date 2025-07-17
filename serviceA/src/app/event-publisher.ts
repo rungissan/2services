@@ -1,25 +1,29 @@
 import Redis from 'ioredis';
-import { config } from './config';
 import { EventPayload, Metric } from './types';
+import { config } from './utils/config.util';
 
 const redisClient = new Redis({
   host: config.redis.host,
   port: config.redis.port,
 });
 
-export class EventPublisher {
-  private static instance: EventPublisher;
+/**
+ * ServiceA-specific event publisher with Redis TimeSeries support
+ * This handles metrics publishing and time-series data
+ */
+export class MetricsEventPublisher {
+  private static instance: MetricsEventPublisher;
   private redis: Redis;
 
   private constructor() {
     this.redis = redisClient;
   }
 
-  public static getInstance(): EventPublisher {
-    if (!EventPublisher.instance) {
-      EventPublisher.instance = new EventPublisher();
+  public static getInstance(): MetricsEventPublisher {
+    if (!MetricsEventPublisher.instance) {
+      MetricsEventPublisher.instance = new MetricsEventPublisher();
     }
-    return EventPublisher.instance;
+    return MetricsEventPublisher.instance;
   }
 
   /**
@@ -103,3 +107,9 @@ export class EventPublisher {
     await this.redis.quit();
   }
 }
+
+// Backward compatibility export
+export const EventPublisher = MetricsEventPublisher;
+
+// Note: For standard events (file upload, data fetch, search query),
+// consider using the shared EventPublisher from '@two-services/shared'

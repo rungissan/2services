@@ -1,7 +1,8 @@
 import { BadRequestException, Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
-import { LoggingService } from './logging.service';
-import { PdfReportService } from './pdf-report.service';
+import { LoggingService } from './services/logging.service';
+import { PdfReportService } from './services/pdf-report.service';
 import type { LogQuery, ReportRequest } from './types';
+import { parseInteger, validateDate } from './utils/validation.util';
 
 @Controller('logs')
 export class LogsController {
@@ -24,23 +25,15 @@ export class LogsController {
   ) {
     const query: LogQuery = {
       eventType,
-      startDate: startDate ? new Date(startDate) : undefined,
-      endDate: endDate ? new Date(endDate) : undefined,
+      startDate: validateDate(startDate, 'startDate'),
+      endDate: validateDate(endDate, 'endDate'),
       source,
       filename,
-      page: page ? parseInt(page, 10) : undefined,
-      limit: limit ? parseInt(limit, 10) : undefined,
+      page: parseInteger(page),
+      limit: parseInteger(limit, 10),
       sortBy,
       sortOrder
     };
-
-    // Validate dates
-    if (query.startDate && isNaN(query.startDate.getTime())) {
-      throw new BadRequestException('Invalid startDate format');
-    }
-    if (query.endDate && isNaN(query.endDate.getTime())) {
-      throw new BadRequestException('Invalid endDate format');
-    }
 
     return await this.loggingService.queryLogs(query);
   }

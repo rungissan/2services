@@ -2,8 +2,8 @@ import fs from 'fs';
 import { MongoClient } from 'mongodb';
 import multer from 'multer';
 import path from 'path';
-import { config } from './config';
-import { Metric, MetricsData, UploadRequest } from './types';
+import { Metric, MetricsData, UploadRequest } from '../types';
+import { config } from './config.util';
 
 const upload = multer({
   dest: 'uploads/',

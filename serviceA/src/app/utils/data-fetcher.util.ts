@@ -1,7 +1,7 @@
 import axios from 'axios';
 import fs from 'fs';
 import { pipeline } from 'stream/promises';
-import { config } from './config';
+import { config } from './config.util';
 
 export async function fetchAndSaveData(): Promise<void> {
   const url = config.dataFetcher.url;

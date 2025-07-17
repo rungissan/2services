@@ -1,15 +1,15 @@
 import { Controller, Get, Post, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiConsumes, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { fetchAndSaveData } from './data-fetcher';
 import { FetchDataResponseDto } from './dto/fetch-data.dto';
 import { SearchQueryDto, SearchResponseDto } from './dto/search.dto';
 import { UploadFileResponseDto } from './dto/upload-file.dto';
 import { EventPublisher } from './event-publisher';
-import { uploadAndParseFile } from './file-uploader';
-import { ensureTextIndex, searchMetrics } from './search-api';
 import { AppService } from './services/app.service';
 import type { SearchQuery, UploadRequest } from './types';
+import { fetchAndSaveData } from './utils/data-fetcher.util';
+import { uploadAndParseFile } from './utils/file-uploader.util';
+import { ensureTextIndex, searchMetrics } from './utils/search-api.util';
 
 @ApiTags('Service A - Data Processor')
 @Controller()

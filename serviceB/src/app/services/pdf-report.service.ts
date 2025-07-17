@@ -3,9 +3,9 @@ import { createWriteStream } from 'fs';
 import { mkdir } from 'fs/promises';
 import Redis from 'ioredis';
 import { join } from 'path';
-import { config } from './config';
+import { LogEvent, ReportRequest } from '../types';
+import { config } from '../utils/config.util';
 import { LoggingService } from './logging.service';
-import { LogEvent, ReportRequest } from './types';
 
 interface TimeSeriesData {
   metric: string;
