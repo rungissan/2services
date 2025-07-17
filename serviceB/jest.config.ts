@@ -17,4 +17,8 @@ export default {
   },
   moduleFileExtensions: ['ts', 'js', 'html'],
   coverageDirectory: 'test-output/jest/coverage',
+  moduleNameMapper: {
+    '^@two-services/shared$': '<rootDir>/../shared/index.ts',
+    '^@two-services/shared/(.*)$': '<rootDir>/../shared/$1'
+  }
 };

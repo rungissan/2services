@@ -18,7 +18,7 @@
     "target": "es2022",
     "customConditions": ["development"],
     "paths": {
-      "@two-services/shared": ["shared/dist/index.d.ts"]
+      "@two-services/shared": ["shared/index.ts"]
     }
   }
 }

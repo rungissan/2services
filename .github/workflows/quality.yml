@@ -38,9 +38,21 @@ jobs:
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
 
-      # SonarCloud analysis
+      # SonarCloud analysis (conditional on token availability)
+      - name: Check SonarCloud Token
+        id: sonar-check
+        run: |
+          if [ -z "${{ secrets.SONAR_TOKEN }}" ]; then
+            echo "SONAR_TOKEN is not set. Skipping SonarCloud analysis."
+            echo "sonar-enabled=false" >> $GITHUB_OUTPUT
+          else
+            echo "SONAR_TOKEN is available. Running SonarCloud analysis."
+            echo "sonar-enabled=true" >> $GITHUB_OUTPUT
+          fi
+
       - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@master
+        if: steps.sonar-check.outputs.sonar-enabled == 'true'
+        uses: SonarSource/sonarqube-scan-action@v5.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -54,6 +66,15 @@ jobs:
             -Dsonar.test.inclusions=**/*.spec.ts,**/*.test.ts
             -Dsonar.typescript.lcov.reportPaths=coverage/lcov.info
             -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
+
+      - name: SonarCloud Setup Instructions
+        if: steps.sonar-check.outputs.sonar-enabled == 'false'
+        run: |
+          echo "::notice title=SonarCloud Setup Required::To enable SonarCloud analysis, please:"
+          echo "::notice::1. Go to https://sonarcloud.io and create an account"
+          echo "::notice::2. Create a new project with key 'two-services' and organization 'rungissan'"
+          echo "::notice::3. Generate a token at https://sonarcloud.io/account/security"
+          echo "::notice::4. Add the token as 'SONAR_TOKEN' secret in your GitHub repository settings"
 
       # Generate test coverage
       - name: Generate coverage report

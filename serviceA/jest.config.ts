@@ -19,5 +19,9 @@ export default {
   coverageDirectory: 'test-output/jest/coverage',
   testTimeout: 10000, // 10 second timeout
   forceExit: true, // Force Jest to exit after tests complete
-  detectOpenHandles: false // We know about the Redis connection, don't warn about it
+  detectOpenHandles: false, // We know about the Redis connection, don't warn about it
+  moduleNameMapper: {
+    '^@two-services/shared$': '<rootDir>/../shared/index.ts',
+    '^@two-services/shared/(.*)$': '<rootDir>/../shared/$1'
+  }
 };

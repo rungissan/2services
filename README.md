@@ -358,6 +358,51 @@ two-services/
    npx nx e2e serviceB-e2e
    ```
 
+### Code Quality & SonarCloud
+
+The project includes comprehensive code quality analysis with SonarCloud integration.
+
+#### Setting up SonarCloud (Optional)
+
+To enable SonarCloud analysis in GitHub Actions:
+
+1. **Create SonarCloud Account:**
+   - Go to [https://sonarcloud.io](https://sonarcloud.io)
+   - Sign up with your GitHub account
+
+2. **Create Organization & Project:**
+   - Organization: `rungissan`
+   - Project Key: `two-services`
+   - Project Name: `Two Services Monorepo`
+
+3. **Generate Token:**
+   - Go to Account → Security → Generate Tokens
+   - Create a token for GitHub Actions integration
+
+4. **Add GitHub Secret:**
+   - Go to your GitHub repository → Settings → Secrets and variables → Actions
+   - Add new repository secret: `SONAR_TOKEN` with the generated token
+
+5. **Configuration:**
+   - The project includes `sonar-project.properties` with pre-configured settings
+   - Quality gates and analysis will run automatically on PR and main branch pushes
+
+#### Local Code Quality Checks
+
+```bash
+# Run all quality checks
+npx nx run-many -t lint test
+
+# Run with coverage
+npx nx run-many -t test --coverage
+
+# Generate complexity reports (requires additional tools)
+npm install -g complexity-report
+find . -name "*.ts" -not -path "./node_modules/*" | head -20 | xargs cr
+```
+
+**Note**: SonarCloud integration is optional. The GitHub Actions workflow will skip SonarCloud analysis if `SONAR_TOKEN` is not configured and provide setup instructions instead.
+
 ## Docker
 
 ### Building Docker Images
