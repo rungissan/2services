@@ -81,48 +81,28 @@ jobs:
           df -h
           free -h || echo "free command not available"
 
-      - name: Set up Docker Buildx (Attempt 1 - Container Driver)
-        id: buildx-setup-container
-        continue-on-error: true
+      - name: Set up Docker Buildx (Optimized)
+        id: buildx-setup
         uses: docker/setup-buildx-action@v3
         with:
           install: true
           driver: docker-container
+          driver-opts: |
+            image=moby/buildkit:latest
           config-inline: |
             [worker.oci]
-              max-parallelism = 1
+              max-parallelism = 2
             [worker.containerd]
               runtime = "runc"
               rootless = false
-        timeout-minutes: 5
 
-      - name: Set up Docker Buildx (Attempt 2 - Docker Driver)
-        id: buildx-setup-docker
-        if: steps.buildx-setup-container.outcome == 'failure'
-        continue-on-error: true
+      - name: Set up Docker Buildx (Fallback without cache)
+        id: buildx-setup-fallback
+        if: failure()
         uses: docker/setup-buildx-action@v3
         with:
           install: true
           driver: docker
-        timeout-minutes: 3
-
-      - name: Set up Docker Buildx (Attempt 3 - Manual Setup)
-        id: buildx-setup-manual
-        if: steps.buildx-setup-container.outcome == 'failure' && steps.buildx-setup-docker.outcome == 'failure'
-        run: |
-          echo "=== Manual buildx setup as fallback ==="
-
-          # Remove any existing builder
-          docker buildx rm manual-builder || echo "No existing manual-builder to remove"
-
-          # Create simple docker driver builder
-          docker buildx create --name manual-builder --driver docker --use
-
-          # Verify it works
-          docker buildx inspect --bootstrap
-
-          echo "✅ Manual buildx setup completed"
-        timeout-minutes: 2
 
       - name: Diagnose Final Buildx Setup
         run: |
@@ -136,6 +116,18 @@ jobs:
             echo "❌ Buildx setup failed completely"
             exit 1
           }
+
+          # Check which driver is being used
+          DRIVER=$(docker buildx inspect --format '{{.Driver}}')
+          echo "BUILDX_DRIVER=$DRIVER" >> $GITHUB_ENV
+
+          if [ "$DRIVER" = "docker-container" ]; then
+            echo "✅ Container driver active - GitHub Actions cache supported"
+            echo "CACHE_SUPPORTED=true" >> $GITHUB_ENV
+          else
+            echo "⚠️  Docker driver active - GitHub Actions cache not supported"
+            echo "CACHE_SUPPORTED=false" >> $GITHUB_ENV
+          fi
 
           echo "✅ Buildx is working correctly"
 
@@ -165,9 +157,9 @@ jobs:
             type=sha,prefix={{branch}}-
 
       # Build Node.js services
-      - name: Build and push ServiceA/ServiceB (multi-platform)
-        if: matrix.service == 'serviceA' || matrix.service == 'serviceB'
-        id: nodejs-build-multi
+      - name: Build and push ServiceA/ServiceB (multi-platform with cache)
+        if: (matrix.service == 'serviceA' || matrix.service == 'serviceB') && env.CACHE_SUPPORTED == 'true'
+        id: nodejs-build-multi-cache
         continue-on-error: true
         uses: docker/build-push-action@v5
         timeout-minutes: 25
@@ -177,14 +169,36 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: |
+            type=gha
+            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_PREFIX }}/${{ matrix.service }}:buildcache
+          cache-to: |
+            type=gha,mode=max
+            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_PREFIX }}/${{ matrix.service }}:buildcache,mode=max
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
+
+      - name: Build and push ServiceA/ServiceB (multi-platform without cache)
+        if: (matrix.service == 'serviceA' || matrix.service == 'serviceB') && (env.CACHE_SUPPORTED == 'false' || steps.nodejs-build-multi-cache.outcome == 'failure')
+        id: nodejs-build-multi-no-cache
+        continue-on-error: true
+        uses: docker/build-push-action@v5
+        timeout-minutes: 25
+        with:
+          context: .
+          file: ${{ matrix.service }}/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_PREFIX }}/${{ matrix.service }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_PREFIX }}/${{ matrix.service }}:buildcache,mode=max
           platforms: linux/amd64,linux/arm64
           build-args: |
             BUILDKIT_INLINE_CACHE=1
 
       - name: Build and push ServiceA/ServiceB (fallback single-platform)
-        if: (matrix.service == 'serviceA' || matrix.service == 'serviceB') && steps.nodejs-build-multi.outcome == 'failure'
+        if: (matrix.service == 'serviceA' || matrix.service == 'serviceB') && steps.nodejs-build-multi-cache.outcome == 'failure' && steps.nodejs-build-multi-no-cache.outcome == 'failure'
         uses: docker/build-push-action@v5
         timeout-minutes: 20
         with:
@@ -193,8 +207,6 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
           platforms: linux/amd64
           build-args: |
             BUILDKIT_INLINE_CACHE=1
@@ -219,9 +231,9 @@ jobs:
           go build -v .
           echo "✅ PDF Generator builds successfully"
 
-      - name: Build and push PDF Generator (multi-platform)
-        if: matrix.service == 'pdf-generator'
-        id: docker-build-multi
+      - name: Build and push PDF Generator (multi-platform with cache)
+        if: matrix.service == 'pdf-generator' && env.CACHE_SUPPORTED == 'true'
+        id: pdf-build-multi-cache
         continue-on-error: true
         uses: docker/build-push-action@v5
         timeout-minutes: 25
@@ -231,14 +243,36 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: |
+            type=gha
+            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_PREFIX }}/${{ matrix.service }}:buildcache
+          cache-to: |
+            type=gha,mode=max
+            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_PREFIX }}/${{ matrix.service }}:buildcache,mode=max
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
+
+      - name: Build and push PDF Generator (multi-platform without cache)
+        if: matrix.service == 'pdf-generator' && (env.CACHE_SUPPORTED == 'false' || steps.pdf-build-multi-cache.outcome == 'failure')
+        id: pdf-build-multi-no-cache
+        continue-on-error: true
+        uses: docker/build-push-action@v5
+        timeout-minutes: 25
+        with:
+          context: ./pdf-generator
+          file: ./pdf-generator/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_PREFIX }}/${{ matrix.service }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_PREFIX }}/${{ matrix.service }}:buildcache,mode=max
           platforms: linux/amd64,linux/arm64
           build-args: |
             BUILDKIT_INLINE_CACHE=1
 
       - name: Build and push PDF Generator (fallback single-platform)
-        if: matrix.service == 'pdf-generator' && steps.docker-build-multi.outcome == 'failure'
+        if: matrix.service == 'pdf-generator' && steps.pdf-build-multi-cache.outcome == 'failure' && steps.pdf-build-multi-no-cache.outcome == 'failure'
         uses: docker/build-push-action@v5
         timeout-minutes: 20
         with:
@@ -247,8 +281,6 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
           platforms: linux/amd64
           build-args: |
             BUILDKIT_INLINE_CACHE=1

@@ -373,20 +373,63 @@ jobs:
           EOF
 
       # Deploy documentation to GitHub Pages
-      - name: Setup Pages
+      - name: Check if Pages is enabled
         if: github.ref == 'refs/heads/main'
+        id: pages-check
+        run: |
+          # Check if we can access the Pages API
+          RESPONSE=$(curl -s -w "%{http_code}" -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/pages" \
+            -o /tmp/pages_response.json)
+
+          if [ "$RESPONSE" = "200" ]; then
+            echo "pages-enabled=true" >> $GITHUB_OUTPUT
+            echo "✅ GitHub Pages is enabled and configured"
+          else
+            echo "pages-enabled=false" >> $GITHUB_OUTPUT
+            echo "⚠️  GitHub Pages is not enabled or not configured for GitHub Actions"
+            echo "HTTP Response Code: $RESPONSE"
+            cat /tmp/pages_response.json 2>/dev/null || echo "No response body"
+          fi
+
+      - name: Setup Pages
+        if: github.ref == 'refs/heads/main' && steps.pages-check.outputs.pages-enabled == 'true'
         uses: actions/configure-pages@v4
+        continue-on-error: true
 
       - name: Upload documentation artifact
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && steps.pages-check.outputs.pages-enabled == 'true'
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./docs
+        continue-on-error: true
 
       - name: Deploy to GitHub Pages
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && steps.pages-check.outputs.pages-enabled == 'true'
         id: deployment
         uses: actions/deploy-pages@v4
+        continue-on-error: true
+
+      - name: Pages setup instructions
+        if: github.ref == 'refs/heads/main' && steps.pages-check.outputs.pages-enabled == 'false'
+        run: |
+          echo "::notice title=GitHub Pages Setup Required::To enable documentation deployment, please:"
+          echo "::notice::1. Go to your repository Settings → Pages"
+          echo "::notice::2. Under 'Source', select 'GitHub Actions'"
+          echo "::notice::3. Click 'Save'"
+          echo "::notice::4. Re-run this workflow to deploy documentation"
+          echo "::notice::Repository URL: https://github.com/${{ github.repository }}/settings/pages"
+
+          echo "📝 Documentation has been generated but not deployed due to Pages configuration."
+          echo "Please enable GitHub Pages with 'GitHub Actions' as the source to deploy documentation."
+
+      - name: Upload documentation as artifact (fallback)
+        if: github.ref == 'refs/heads/main' && steps.pages-check.outputs.pages-enabled == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation
+          path: ./docs
+          retention-days: 30
 
       - name: Comment PR with documentation links
         if: github.event_name == 'pull_request'
@@ -401,10 +444,23 @@ jobs:
             - **Go Docs**: Generated for PDF generator service
             - **API Docs**: Available in docs/api/
 
-            The documentation will be automatically deployed to GitHub Pages when this PR is merged to main.
+            ${process.env.GITHUB_REF === 'refs/heads/main' ?
+              'The documentation will be automatically deployed to GitHub Pages when this PR is merged to main.' :
+              'Documentation artifacts are available for download from the workflow run.'}
 
-            > **Note**: Make sure to update relevant documentation files when making significant changes!
+            > **Note**: If GitHub Pages deployment fails, make sure Pages is enabled in repository settings with "GitHub Actions" as the source.
+
+            > **Setup URL**: https://github.com/${{ github.repository }}/settings/pages
+
+            > **Tip**: Make sure to update relevant documentation files when making significant changes!
             `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
 
             github.rest.issues.createComment({
               issue_number: context.issue.number,
