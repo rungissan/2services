@@ -1,0 +1,397 @@
+name: Performance & Monitoring
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Run performance tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  # Performance testing
+  performance-test:
+    runs-on: ubuntu-latest
+    name: Performance Tests
+
+    services:
+      mongodb:
+        image: mongo:7
+        env:
+          MONGO_INITDB_ROOT_USERNAME: admin
+          MONGO_INITDB_ROOT_PASSWORD: password
+        ports:
+          - 27017:27017
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+
+      redis-timeseries:
+        image: redislabs/redistimeseries:latest
+        ports:
+          - 6380:6379
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Build services
+        run: npx nx run-many -t build
+
+      - name: Start services in background
+        run: |
+          # Start ServiceA
+          cd serviceA && npm start &
+          SERVICEA_PID=$!
+          echo "SERVICEA_PID=$SERVICEA_PID" >> $GITHUB_ENV
+
+          # Start ServiceB
+          cd ../serviceB && npm start &
+          SERVICEB_PID=$!
+          echo "SERVICEB_PID=$SERVICEB_PID" >> $GITHUB_ENV
+
+          # Start PDF Generator
+          cd ../pdf-generator && go run main.go &
+          PDF_GEN_PID=$!
+          echo "PDF_GEN_PID=$PDF_GEN_PID" >> $GITHUB_ENV
+
+          # Wait for services to start
+          sleep 30
+        env:
+          MONGODB_URI: mongodb://admin:password@localhost:27017/two-services-perf?authSource=admin
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+
+      - name: Install performance testing tools
+        run: |
+          npm install -g artillery@latest
+          npm install -g clinic
+
+      - name: Create performance test scripts
+        run: |
+          mkdir -p performance-tests
+
+          # ServiceA performance test
+          cat > performance-tests/servicea-test.yml << 'EOF'
+          config:
+            target: 'http://localhost:3001'
+            phases:
+              - duration: 60
+                arrivalRate: 10
+              - duration: 120
+                arrivalRate: 50
+              - duration: 60
+                arrivalRate: 100
+          scenarios:
+            - name: "API Health Check"
+              weight: 30
+              flow:
+                - get:
+                    url: "/api/health"
+            - name: "Data Upload"
+              weight: 40
+              flow:
+                - post:
+                    url: "/api/data"
+                    json:
+                      data: { "test": "performance", "timestamp": "{{ $timestamp }}" }
+            - name: "Data Retrieval"
+              weight: 30
+              flow:
+                - get:
+                    url: "/api/data"
+          EOF
+
+          # ServiceB performance test
+          cat > performance-tests/serviceb-test.yml << 'EOF'
+          config:
+            target: 'http://localhost:3002'
+            phases:
+              - duration: 60
+                arrivalRate: 10
+              - duration: 120
+                arrivalRate: 50
+              - duration: 60
+                arrivalRate: 100
+          scenarios:
+            - name: "API Health Check"
+              weight: 40
+              flow:
+                - get:
+                    url: "/api/health"
+            - name: "Metrics Storage"
+              weight: 30
+              flow:
+                - post:
+                    url: "/api/metrics"
+                    json:
+                      metric: "performance_test"
+                      value: "{{ $randomNumber(1, 100) }}"
+                      timestamp: "{{ $timestamp }}"
+            - name: "Logs Query"
+              weight: 30
+              flow:
+                - get:
+                    url: "/api/logs"
+          EOF
+
+      - name: Run performance tests
+        run: |
+          # Test ServiceA
+          echo "🚀 Testing ServiceA performance..."
+          artillery run performance-tests/servicea-test.yml --output servicea-results.json
+
+          # Test ServiceB
+          echo "🚀 Testing ServiceB performance..."
+          artillery run performance-tests/serviceb-test.yml --output serviceb-results.json
+
+          # Generate HTML reports
+          artillery report servicea-results.json --output servicea-report.html
+          artillery report serviceb-results.json --output serviceb-report.html
+
+      - name: Analyze performance results
+        id: performance
+        run: |
+          # Parse performance results
+          cat > analyze_performance.js << 'EOF'
+          const fs = require('fs');
+
+          function analyzeResults(filename, serviceName) {
+            try {
+              const results = JSON.parse(fs.readFileSync(filename, 'utf8'));
+              const aggregate = results.aggregate;
+
+              console.log(`\n=== ${serviceName} Performance Results ===`);
+              console.log(`Total requests: ${aggregate.counters['http.requests'] || 0}`);
+              console.log(`Total responses: ${aggregate.counters['http.responses'] || 0}`);
+              console.log(`Response time p95: ${aggregate.latencies ? aggregate.latencies.p95 : 'N/A'}ms`);
+              console.log(`Response time p99: ${aggregate.latencies ? aggregate.latencies.p99 : 'N/A'}ms`);
+              console.log(`RPS mean: ${aggregate.rps ? aggregate.rps.mean : 'N/A'}`);
+              console.log(`Errors: ${aggregate.counters['errors.total'] || 0}`);
+
+              // Check performance thresholds
+              const p95 = aggregate.latencies ? aggregate.latencies.p95 : 0;
+              const errorRate = (aggregate.counters['errors.total'] || 0) / (aggregate.counters['http.requests'] || 1);
+
+              let status = 'PASS';
+              let issues = [];
+
+              if (p95 > 1000) {
+                status = 'FAIL';
+                issues.push(`High latency: p95 ${p95}ms > 1000ms threshold`);
+              }
+
+              if (errorRate > 0.01) {
+                status = 'FAIL';
+                issues.push(`High error rate: ${(errorRate * 100).toFixed(2)}% > 1% threshold`);
+              }
+
+              console.log(`Status: ${status}`);
+              if (issues.length > 0) {
+                console.log(`Issues: ${issues.join(', ')}`);
+              }
+
+              return { status, p95, errorRate, issues };
+            } catch (error) {
+              console.error(`Error analyzing ${filename}:`, error.message);
+              return { status: 'ERROR', p95: 0, errorRate: 1, issues: [error.message] };
+            }
+          }
+
+          const serviceAResults = analyzeResults('servicea-results.json', 'ServiceA');
+          const serviceBResults = analyzeResults('serviceb-results.json', 'ServiceB');
+
+          // Overall status
+          const overallStatus = serviceAResults.status === 'PASS' && serviceBResults.status === 'PASS' ? 'PASS' : 'FAIL';
+          console.log(`\n=== Overall Performance Status: ${overallStatus} ===`);
+
+          // Output for GitHub Actions
+          console.log(`::set-output name=status::${overallStatus}`);
+          console.log(`::set-output name=servicea_p95::${serviceAResults.p95}`);
+          console.log(`::set-output name=serviceb_p95::${serviceBResults.p95}`);
+          console.log(`::set-output name=servicea_errors::${serviceAResults.errorRate}`);
+          console.log(`::set-output name=serviceb_errors::${serviceBResults.errorRate}`);
+          EOF
+
+          node analyze_performance.js
+
+      - name: Upload performance results
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-results
+          path: |
+            servicea-results.json
+            serviceb-results.json
+            servicea-report.html
+            serviceb-report.html
+
+      - name: Comment PR with performance results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            try {
+              const serviceAResults = JSON.parse(fs.readFileSync('servicea-results.json', 'utf8'));
+              const serviceBResults = JSON.parse(fs.readFileSync('serviceb-results.json', 'utf8'));
+
+              const formatResults = (results, serviceName) => {
+                const agg = results.aggregate;
+                return `
+              **${serviceName}**
+              - Requests: ${agg.counters['http.requests'] || 0}
+              - P95 Latency: ${agg.latencies ? agg.latencies.p95 : 'N/A'}ms
+              - P99 Latency: ${agg.latencies ? agg.latencies.p99 : 'N/A'}ms
+              - RPS: ${agg.rps ? agg.rps.mean.toFixed(2) : 'N/A'}
+              - Errors: ${agg.counters['errors.total'] || 0}
+              `;
+              };
+
+              const comment = `## 🚀 Performance Test Results
+
+              ${formatResults(serviceAResults, 'ServiceA')}
+              ${formatResults(serviceBResults, 'ServiceB')}
+
+              > Performance tests completed successfully! 📊
+              `;
+
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+            } catch (error) {
+              console.error('Error creating performance comment:', error);
+            }
+
+      - name: Stop services
+        if: always()
+        run: |
+          # Stop all background services
+          if [ ! -z "$SERVICEA_PID" ]; then kill $SERVICEA_PID || true; fi
+          if [ ! -z "$SERVICEB_PID" ]; then kill $SERVICEB_PID || true; fi
+          if [ ! -z "$PDF_GEN_PID" ]; then kill $PDF_GEN_PID || true; fi
+
+  # Resource monitoring
+  resource-monitoring:
+    runs-on: ubuntu-latest
+    name: Resource Monitoring
+    if: github.event_name == 'schedule'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Monitor Docker image sizes
+        run: |
+          echo "📊 Monitoring Docker image sizes..."
+
+          # Build images and check sizes
+          docker build -t servicea-test ./serviceA
+          docker build -t serviceb-test ./serviceB
+          docker build -t pdf-generator-test ./pdf-generator
+
+          echo "=== Docker Image Sizes ===" > image-sizes.txt
+          docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}" | grep -E "(servicea-test|serviceb-test|pdf-generator-test)" >> image-sizes.txt
+
+          cat image-sizes.txt
+
+      - name: Check bundle sizes
+        run: |
+          npm ci --legacy-peer-deps
+          npx nx run-many -t build
+
+          echo "=== Bundle Sizes ===" > bundle-sizes.txt
+
+          # Check serviceA bundle size
+          if [ -d "serviceA/dist" ]; then
+            SERVICEA_SIZE=$(du -sh serviceA/dist | cut -f1)
+            echo "ServiceA bundle: $SERVICEA_SIZE" >> bundle-sizes.txt
+          fi
+
+          # Check serviceB bundle size
+          if [ -d "serviceB/dist" ]; then
+            SERVICEB_SIZE=$(du -sh serviceB/dist | cut -f1)
+            echo "ServiceB bundle: $SERVICEB_SIZE" >> bundle-sizes.txt
+          fi
+
+          cat bundle-sizes.txt
+
+      - name: Create monitoring issue
+        if: github.event_name == 'schedule'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            let issueBody = `## 📊 Weekly Resource Monitoring Report\n\n`;
+            issueBody += `**Date:** ${new Date().toISOString().split('T')[0]}\n\n`;
+
+            try {
+              const imageSizes = fs.readFileSync('image-sizes.txt', 'utf8');
+              issueBody += `### Docker Image Sizes\n\`\`\`\n${imageSizes}\n\`\`\`\n\n`;
+            } catch (e) {
+              issueBody += `### Docker Image Sizes\nError reading image sizes\n\n`;
+            }
+
+            try {
+              const bundleSizes = fs.readFileSync('bundle-sizes.txt', 'utf8');
+              issueBody += `### Bundle Sizes\n\`\`\`\n${bundleSizes}\n\`\`\`\n\n`;
+            } catch (e) {
+              issueBody += `### Bundle Sizes\nError reading bundle sizes\n\n`;
+            }
+
+            issueBody += `### Recommendations\n`;
+            issueBody += `- Monitor for significant size increases\n`;
+            issueBody += `- Consider optimizations if bundles are growing\n`;
+            issueBody += `- Review dependencies regularly\n\n`;
+            issueBody += `_This report was automatically generated._`;
+
+            // Check if monitoring issue already exists this week
+            const oneWeekAgo = new Date();
+            oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+            const { data: existingIssues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: ['monitoring', 'automated'],
+              state: 'open',
+              since: oneWeekAgo.toISOString()
+            });
+
+            const hasRecentMonitoringIssue = existingIssues.some(issue =>
+              issue.title.includes('Weekly Resource Monitoring Report')
+            );
+
+            if (!hasRecentMonitoringIssue) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `📊 Weekly Resource Monitoring Report - ${new Date().toISOString().split('T')[0]}`,
+                body: issueBody,
+                labels: ['monitoring', 'automated', 'performance']
+              });
+            }

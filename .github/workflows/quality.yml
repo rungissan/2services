@@ -1,0 +1,378 @@
+name: Code Quality & Documentation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+  pages: write
+  id-token: write
+
+jobs:
+  # Code quality analysis
+  code-quality:
+    runs-on: ubuntu-latest
+    name: Code Quality Analysis
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      # SonarCloud analysis
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.projectKey=two-services
+            -Dsonar.organization=rungissan
+            -Dsonar.sources=.
+            -Dsonar.exclusions=**/node_modules/**,**/dist/**,**/*.spec.ts,**/*.test.ts
+            -Dsonar.tests=.
+            -Dsonar.test.inclusions=**/*.spec.ts,**/*.test.ts
+            -Dsonar.typescript.lcov.reportPaths=coverage/lcov.info
+            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
+
+      # Generate test coverage
+      - name: Generate coverage report
+        run: |
+          npx nx run-many -t test --coverage
+
+          # Combine coverage reports
+          mkdir -p coverage
+          npx nyc merge serviceA/coverage serviceB/coverage shared/coverage coverage/coverage.json
+          npx nyc report --reporter=lcov --report-dir=coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage/lcov.info
+          fail_ci_if_error: true
+          verbose: true
+
+      # Code complexity analysis
+      - name: Analyze code complexity
+        run: |
+          npm install -g complexity-report
+
+          echo "=== Code Complexity Report ===" > complexity-report.txt
+          echo "" >> complexity-report.txt
+
+          # Analyze TypeScript files
+          find . -name "*.ts" -not -path "./node_modules/*" -not -path "./dist/*" -not -path "./.nx/*" | head -20 | while read file; do
+            echo "File: $file" >> complexity-report.txt
+            cr "$file" --format json 2>/dev/null | jq -r '.reports[0] | "  Complexity: \(.complexity.cyclomatic), Functions: \(.functions | length)"' >> complexity-report.txt 2>/dev/null || echo "  Could not analyze" >> complexity-report.txt
+            echo "" >> complexity-report.txt
+          done
+
+      # Go code quality
+      - name: Go code quality checks
+        working-directory: ./pdf-generator
+        run: |
+          # Install Go quality tools
+          go install honnef.co/go/tools/cmd/staticcheck@latest
+          go install github.com/fzipp/gocyclo/cmd/gocyclo@latest
+          go install github.com/gordonklaus/ineffassign@latest
+
+          echo "=== Go Code Quality Report ===" > ../go-quality-report.txt
+          echo "" >> ../go-quality-report.txt
+
+          # Run staticcheck
+          echo "## Staticcheck Results:" >> ../go-quality-report.txt
+          staticcheck ./... 2>&1 | tee -a ../go-quality-report.txt || true
+          echo "" >> ../go-quality-report.txt
+
+          # Run gocyclo
+          echo "## Cyclomatic Complexity:" >> ../go-quality-report.txt
+          gocyclo -over 10 . 2>&1 | tee -a ../go-quality-report.txt || true
+          echo "" >> ../go-quality-report.txt
+
+          # Run ineffassign
+          echo "## Inefficient Assignments:" >> ../go-quality-report.txt
+          ineffassign . 2>&1 | tee -a ../go-quality-report.txt || true
+
+      - name: Upload quality reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-reports
+          path: |
+            complexity-report.txt
+            go-quality-report.txt
+            coverage/
+
+  # Documentation generation
+  documentation:
+    runs-on: ubuntu-latest
+    name: Generate Documentation
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      # Generate TypeScript documentation
+      - name: Generate TypeDoc documentation
+        run: |
+          npm install -g typedoc
+
+          # Generate documentation for shared library
+          typedoc --out docs/shared shared/index.ts
+
+          # Generate documentation for services
+          typedoc --out docs/serviceA serviceA/src/main.ts
+          typedoc --out docs/serviceB serviceB/src/main.ts
+
+      # Generate Go documentation
+      - name: Generate Go documentation
+        run: |
+          # Install godoc
+          go install golang.org/x/tools/cmd/godoc@latest
+
+          # Generate Go documentation
+          cd pdf-generator
+          go doc -all > ../docs/pdf-generator.md
+
+      # Generate API documentation
+      - name: Generate OpenAPI documentation
+        run: |
+          npm install -g @apidevtools/swagger-parser
+
+          # Create OpenAPI documentation structure
+          mkdir -p docs/api
+
+          # Generate API docs for each service
+          cat > docs/api/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Two Services API Documentation</title>
+            <style>
+              body { font-family: Arial, sans-serif; margin: 40px; }
+              .service { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
+              h1 { color: #333; }
+              h2 { color: #666; }
+              .endpoint { margin: 10px 0; padding: 10px; background: #f5f5f5; border-radius: 3px; }
+              .method { font-weight: bold; color: #0066cc; }
+            </style>
+          </head>
+          <body>
+            <h1>Two Services API Documentation</h1>
+
+            <div class="service">
+              <h2>ServiceA - Data Ingestion & Processing (Port 3001)</h2>
+              <div class="endpoint">
+                <span class="method">GET</span> /api/health - Health check
+              </div>
+              <div class="endpoint">
+                <span class="method">POST</span> /api/upload - File upload (JSON/Excel)
+              </div>
+              <div class="endpoint">
+                <span class="method">GET</span> /api/search - Search MongoDB data
+              </div>
+              <div class="endpoint">
+                <span class="method">POST</span> /api/stream - Stream data processing
+              </div>
+              <div class="endpoint">
+                <span class="method">POST</span> /api/data - Store data in MongoDB
+              </div>
+              <div class="endpoint">
+                <span class="method">GET</span> /api/data - Retrieve data from MongoDB
+              </div>
+              <div class="endpoint">
+                <span class="method">POST</span> /api/events - Publish events to Redis Pub/Sub
+              </div>
+            </div>
+
+            <div class="service">
+              <h2>ServiceB - Logging & Reporting (Port 3002)</h2>
+              <div class="endpoint">
+                <span class="method">GET</span> /api/health - Health check
+              </div>
+              <div class="endpoint">
+                <span class="method">POST</span> /api/metrics - Store time-series data
+              </div>
+              <div class="endpoint">
+                <span class="method">GET</span> /api/metrics - Retrieve time-series data
+              </div>
+              <div class="endpoint">
+                <span class="method">POST</span> /api/cache - Cache operations
+              </div>
+              <div class="endpoint">
+                <span class="method">GET</span> /api/logs - Query event logs
+              </div>
+              <div class="endpoint">
+                <span class="method">POST</span> /reports/generate - Generate PDF report (sync)
+              </div>
+              <div class="endpoint">
+                <span class="method">POST</span> /reports/generate-async - Generate PDF report (async)
+              </div>
+              <div class="endpoint">
+                <span class="method">GET</span> /reports/status/:reportId - Get report status
+              </div>
+            </div>
+
+            <div class="service">
+              <h2>PDF Generator - gRPC Service (Port 50051)</h2>
+              <div class="endpoint">
+                <span class="method">gRPC</span> GenerateReport - Generate PDF from time-series data
+              </div>
+              <div class="endpoint">
+                <span class="method">gRPC</span> GetReportStatus - Get report generation status
+              </div>
+            </div>
+          </body>
+          </html>
+          EOF
+
+      # Check documentation links
+      - name: Check documentation links
+        run: |
+          npm install -g markdown-link-check
+
+          # Check all markdown files for broken links
+          find . -name "*.md" -not -path "./node_modules/*" -not -path "./dist/*" | while read file; do
+            echo "Checking links in $file"
+            markdown-link-check "$file" --config .github/markdown-link-check.json || true
+          done
+
+      - name: Create link check config
+        run: |
+          mkdir -p .github
+          cat > .github/markdown-link-check.json << 'EOF'
+          {
+            "ignorePatterns": [
+              {
+                "pattern": "^http://localhost"
+              },
+              {
+                "pattern": "^https://localhost"
+              }
+            ],
+            "timeout": "5s",
+            "retryOn429": true,
+            "retryCount": 3,
+            "fallbackRetryDelay": "30s",
+            "aliveStatusCodes": [200, 206]
+          }
+          EOF
+
+      # Deploy documentation to GitHub Pages
+      - name: Setup Pages
+        if: github.ref == 'refs/heads/main'
+        uses: actions/configure-pages@v4
+
+      - name: Upload documentation artifact
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./docs
+
+      - name: Deploy to GitHub Pages
+        if: github.ref == 'refs/heads/main'
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Comment PR with documentation links
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const comment = `## 📚 Documentation Updated
+
+            The documentation has been generated for this PR:
+
+            - **TypeScript Docs**: Generated with TypeDoc
+            - **Go Docs**: Generated for PDF generator service
+            - **API Docs**: Available in docs/api/
+
+            The documentation will be automatically deployed to GitHub Pages when this PR is merged to main.
+
+            > **Note**: Make sure to update relevant documentation files when making significant changes!
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+  # Accessibility and SEO checks (if applicable)
+  accessibility:
+    runs-on: ubuntu-latest
+    name: Accessibility & Standards Check
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check README and documentation quality
+        run: |
+          npm install -g alex write-good
+
+          echo "=== Documentation Quality Report ===" > doc-quality-report.txt
+          echo "" >> doc-quality-report.txt
+
+          # Check for inclusive language
+          echo "## Inclusive Language Check:" >> doc-quality-report.txt
+          alex README.md 2>&1 | tee -a doc-quality-report.txt || true
+          echo "" >> doc-quality-report.txt
+
+          # Check writing quality
+          echo "## Writing Quality Check:" >> doc-quality-report.txt
+          write-good README.md 2>&1 | tee -a doc-quality-report.txt || true
+          echo "" >> doc-quality-report.txt
+
+      - name: Check file structure and naming conventions
+        run: |
+          echo "=== File Structure Report ===" > file-structure-report.txt
+          echo "" >> file-structure-report.txt
+
+          # Check for consistent naming
+          echo "## Inconsistent File Naming:" >> file-structure-report.txt
+          find . -name "*.ts" -not -path "./node_modules/*" | grep -E "[A-Z]" | head -10 >> file-structure-report.txt || echo "No inconsistent TypeScript file naming found" >> file-structure-report.txt
+          echo "" >> file-structure-report.txt
+
+          # Check for large files
+          echo "## Large Files (>1MB):" >> file-structure-report.txt
+          find . -type f -size +1M -not -path "./node_modules/*" -not -path "./.git/*" | head -10 >> file-structure-report.txt || echo "No large files found" >> file-structure-report.txt
+          echo "" >> file-structure-report.txt
+
+      - name: Upload quality reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: accessibility-reports
+          path: |
+            doc-quality-report.txt
+            file-structure-report.txt

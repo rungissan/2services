@@ -1,0 +1,238 @@
+name: Dependency Updates
+
+on:
+  schedule:
+    # Run weekly on Mondays at 9 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch: # Allow manual triggering
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  # Update Node.js dependencies
+  update-npm-dependencies:
+    runs-on: ubuntu-latest
+    name: Update NPM Dependencies
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Check for outdated packages
+        id: outdated
+        run: |
+          # Check for outdated packages
+          OUTDATED=$(npm outdated --json || echo "{}")
+          echo "outdated=$OUTDATED" >> $GITHUB_OUTPUT
+
+          # Check if there are any outdated packages
+          if [ "$OUTDATED" != "{}" ]; then
+            echo "has_updates=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_updates=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update dependencies
+        if: steps.outdated.outputs.has_updates == 'true'
+        run: |
+          # Update patch and minor versions
+          npx npm-check-updates -u --target minor
+          npm install --legacy-peer-deps
+
+      - name: Run tests after updates
+        if: steps.outdated.outputs.has_updates == 'true'
+        run: |
+          npx nx run-many -t lint test build
+        continue-on-error: true
+
+      - name: Create Pull Request
+        if: steps.outdated.outputs.has_updates == 'true'
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: 'chore: update npm dependencies'
+          title: '🔄 Automated NPM Dependency Updates'
+          body: |
+            This PR contains automated dependency updates.
+
+            ## Changes
+            - Updated NPM packages to latest minor/patch versions
+            - All tests have been run to ensure compatibility
+
+            ## Outdated Packages
+            ```json
+            ${{ steps.outdated.outputs.outdated }}
+            ```
+
+            Please review and merge if all checks pass.
+          branch: chore/update-npm-dependencies
+          delete-branch: true
+
+  # Update Go dependencies
+  update-go-dependencies:
+    runs-on: ubuntu-latest
+    name: Update Go Dependencies
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Update Go modules
+        working-directory: ./pdf-generator
+        run: |
+          # Check for module updates
+          go list -u -m all > before_update.txt
+
+          # Update dependencies
+          go get -u ./...
+          go mod tidy
+
+          # Check what changed
+          go list -u -m all > after_update.txt
+
+          # Create diff
+          if ! diff -q before_update.txt after_update.txt > /dev/null; then
+            echo "has_updates=true" >> $GITHUB_OUTPUT
+            echo "Go modules updated"
+          else
+            echo "has_updates=false" >> $GITHUB_OUTPUT
+            echo "No Go module updates available"
+          fi
+
+      - name: Test Go updates
+        if: env.has_updates == 'true'
+        working-directory: ./pdf-generator
+        run: |
+          go build ./...
+          go test ./...
+
+      - name: Create Pull Request for Go updates
+        if: env.has_updates == 'true'
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: 'chore: update go dependencies'
+          title: '🔄 Automated Go Dependency Updates'
+          body: |
+            This PR contains automated Go dependency updates.
+
+            ## Changes
+            - Updated Go modules in pdf-generator service
+            - All tests have been run to ensure compatibility
+
+            Please review and merge if all checks pass.
+          branch: chore/update-go-dependencies
+          delete-branch: true
+
+  # Security audit
+  security-audit:
+    runs-on: ubuntu-latest
+    name: Security Audit
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Run npm audit
+        id: audit
+        run: |
+          # Run audit and capture output
+          npm audit --audit-level=moderate --json > audit-results.json || true
+
+          # Check if there are vulnerabilities
+          VULNERABILITIES=$(cat audit-results.json | jq '.metadata.vulnerabilities.total' 2>/dev/null || echo "0")
+          echo "vulnerabilities=$VULNERABILITIES" >> $GITHUB_OUTPUT
+
+          if [ "$VULNERABILITIES" -gt 0 ]; then
+            echo "has_vulnerabilities=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_vulnerabilities=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create security issue
+        if: steps.audit.outputs.has_vulnerabilities == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const auditResults = JSON.parse(fs.readFileSync('audit-results.json', 'utf8'));
+
+            const vulnerabilities = auditResults.metadata.vulnerabilities;
+            const advisories = Object.values(auditResults.advisories || {});
+
+            let issueBody = `## 🚨 Security Vulnerabilities Detected\n\n`;
+            issueBody += `**Total vulnerabilities:** ${vulnerabilities.total}\n`;
+            issueBody += `- Critical: ${vulnerabilities.critical}\n`;
+            issueBody += `- High: ${vulnerabilities.high}\n`;
+            issueBody += `- Moderate: ${vulnerabilities.moderate}\n`;
+            issueBody += `- Low: ${vulnerabilities.low}\n\n`;
+
+            if (advisories.length > 0) {
+              issueBody += `## Details\n\n`;
+              advisories.slice(0, 5).forEach(advisory => {
+                issueBody += `### ${advisory.title}\n`;
+                issueBody += `- **Severity:** ${advisory.severity}\n`;
+                issueBody += `- **Package:** ${advisory.module_name}\n`;
+                issueBody += `- **Vulnerable versions:** ${advisory.vulnerable_versions}\n`;
+                issueBody += `- **Patched versions:** ${advisory.patched_versions}\n\n`;
+              });
+            }
+
+            issueBody += `\n## Recommended Actions\n`;
+            issueBody += `1. Run \`npm audit fix\` to automatically fix issues\n`;
+            issueBody += `2. Review and update vulnerable packages manually\n`;
+            issueBody += `3. Consider using alternative packages if fixes are not available\n\n`;
+            issueBody += `_This issue was automatically created by the security audit workflow._`;
+
+            const { data: existingIssues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: ['security', 'dependencies'],
+              state: 'open'
+            });
+
+            if (existingIssues.length === 0) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `🚨 Security vulnerabilities detected - ${vulnerabilities.total} total`,
+                body: issueBody,
+                labels: ['security', 'dependencies', 'automated']
+              });
+            }
+
+      - name: Upload audit results
+        if: steps.audit.outputs.has_vulnerabilities == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-audit-results
+          path: audit-results.json

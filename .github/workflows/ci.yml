@@ -1,42 +1,222 @@
-name: CI
+name: CI/CD Pipeline
 
 on:
   push:
     branches:
       - main
+      - develop
   pull_request:
+    branches:
+      - main
+      - develop
 
 permissions:
   actions: read
   contents: read
+  security-events: write
+  pull-requests: write
+
+env:
+  NODE_VERSION: '20'
+  GO_VERSION: '1.21'
 
 jobs:
-  main:
+  # Job 1: Lint, Test, and Build
+  test-and-build:
     runs-on: ubuntu-latest
+    name: Test & Build
+
+    services:
+      mongodb:
+        image: mongo:7
+        env:
+          MONGO_INITDB_ROOT_USERNAME: admin
+          MONGO_INITDB_ROOT_PASSWORD: password
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        env:
+          REDIS_PASSWORD: password
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
           filter: tree:0
           fetch-depth: 0
 
-      # This enables task distribution via Nx Cloud
-      # Run this command as early as possible, before dependencies are installed
-      # Learn more at https://nx.dev/ci/reference/nx-cloud-cli#npx-nxcloud-startcirun
-      # Uncomment this line to enable task distribution
-      # - run: npx nx start-ci-run --distribute-on="3 linux-medium-js" --stop-agents-after="build"
-
-      # Cache node_modules
-      - uses: actions/setup-node@v4
+      # Setup Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
-      - run: npm ci --legacy-peer-deps
+      # Setup Go for PDF generator
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: pdf-generator/go.sum
 
-      # Prepend any command with "nx-cloud record --" to record its logs to Nx Cloud
-      # - run: npx nx-cloud record -- echo Hello World
-      # As your workspace grows, you can change this to use Nx Affected to run only tasks affected by the changes in this PR/commit. Learn more: https://nx.dev/ci/features/affected
-      - run: npx nx run-many -t lint test build
-      # Nx Cloud recommends fixes for failures to help you get CI green faster. Learn more: https://nx.dev/ci/features/self-healing-ci
-      - run: npx nx fix-ci
+      # Install dependencies
+      - name: Install Node.js dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Install Go dependencies
+        working-directory: ./pdf-generator
+        run: go mod download
+
+      # Cache Nx computations
+      - name: Cache Nx
+        uses: actions/cache@v3
+        with:
+          path: .nx/cache
+          key: nx-${{ runner.os }}-${{ hashFiles('nx.json') }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            nx-${{ runner.os }}-${{ hashFiles('nx.json') }}-
+            nx-${{ runner.os }}-
+
+      # Run tests and builds
+      - name: Run linting
+        run: npx nx run-many -t lint
+
+      - name: Run tests
+        run: npx nx run-many -t test
+        env:
+          MONGODB_URI: mongodb://admin:password@localhost:27017/two-services?authSource=admin
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          REDIS_PASSWORD: password
+
+      - name: Build applications
+        run: npx nx run-many -t build
+
+      # Build Go PDF generator
+      - name: Build PDF Generator
+        working-directory: ./pdf-generator
+        run: go build -v ./...
+
+      - name: Test PDF Generator
+        working-directory: ./pdf-generator
+        run: go test -v ./...
+
+      # Fix any Nx issues
+      - name: Fix CI issues
+        run: npx nx fix-ci
         if: always()
+
+      # Upload test results
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: |
+            **/test-results.xml
+            **/coverage/**
+            **/.nx/cache
+
+  # Job 2: End-to-End Tests
+  e2e-tests:
+    runs-on: ubuntu-latest
+    name: E2E Tests
+    needs: test-and-build
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+
+    services:
+      mongodb:
+        image: mongo:7
+        env:
+          MONGO_INITDB_ROOT_USERNAME: admin
+          MONGO_INITDB_ROOT_PASSWORD: password
+        ports:
+          - 27017:27017
+
+      redis:
+        image: redis:7-alpine
+        env:
+          REDIS_PASSWORD: password
+        ports:
+          - 6379:6379
+
+      redis-timeseries:
+        image: redislabs/redistimeseries:latest
+        ports:
+          - 6380:6379
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Build applications
+        run: npx nx run-many -t build
+
+      - name: Run E2E tests
+        run: npx nx run-many -t e2e
+        env:
+          MONGODB_URI: mongodb://admin:password@localhost:27017/two-services-e2e?authSource=admin
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          REDIS_TIMESERIES_PORT: 6380
+
+  # Job 3: Security Scanning
+  security-scan:
+    runs-on: ubuntu-latest
+    name: Security Scan
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      # Run npm audit
+      - name: Run npm audit
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
+      # Run CodeQL analysis
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v2
+        with:
+          languages: javascript, go
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v2
