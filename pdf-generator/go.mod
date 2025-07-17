@@ -1,13 +1,13 @@
 module pdf-generator
 
-go 1.21
+go 1.22
 
 require (
 	github.com/go-pdf/fpdf v0.9.0
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/wcharczuk/go-chart/v2 v2.1.1
 	google.golang.org/grpc v1.64.0
-	google.golang.org/protobuf v1.33.0
+	google.golang.org/protobuf v1.36.6
 )
 
 require (

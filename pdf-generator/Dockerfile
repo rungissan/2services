@@ -1,4 +1,4 @@
-FROM golang:1.21-alpine AS builder
+FROM golang:1.22-alpine AS builder
 
 # Install dependencies
 RUN apk add --no-cache git protobuf protobuf-dev build-base
@@ -12,9 +12,9 @@ COPY go.mod go.sum ./
 # Download dependencies
 RUN go mod download && go mod verify
 
-# Install protoc-gen-go tools
-RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest && \
-    go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+# Install protoc-gen-go tools with compatible versions
+RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.6 && \
+    go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.5.1
 
 # Copy source code
 COPY . .
