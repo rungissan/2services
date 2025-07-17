@@ -12,43 +12,87 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   async onModuleInit() {
     const config = getDatabaseConfig();
 
-    // Main Redis client
-    this.redisClient = new Redis({
-      host: config.redis.host,
-      port: config.redis.port,
-      password: config.redis.password,
-      db: config.redis.db,
-      maxRetriesPerRequest: 3,
-    });
+    try {
+      // Main Redis client
+      this.redisClient = new Redis({
+        host: config.redis.host,
+        port: config.redis.port,
+        db: config.redis.db,
+        maxRetriesPerRequest: 3,
+        lazyConnect: true,
+      });
 
-    // Redis TimeSeries client
-    this.redisTimeSeriesClient = new Redis({
-      host: config.redisTimeSeries.host,
-      port: config.redisTimeSeries.port,
-      password: config.redisTimeSeries.password,
-      db: config.redisTimeSeries.db,
-      maxRetriesPerRequest: 3,
-    });
+      // Redis TimeSeries client
+      this.redisTimeSeriesClient = new Redis({
+        host: config.redisTimeSeries.host,
+        port: config.redisTimeSeries.port,
+        db: config.redisTimeSeries.db,
+        maxRetriesPerRequest: 3,
+        lazyConnect: true,
+      });
 
-    // Redis Pub/Sub client (publisher)
-    this.redisPubSubClient = new Redis({
-      host: config.redisPubSub.host,
-      port: config.redisPubSub.port,
-      password: config.redisPubSub.password,
-      db: config.redisPubSub.db,
-      maxRetriesPerRequest: 3,
-    });
+      // Redis Pub/Sub client (publisher)
+      this.redisPubSubClient = new Redis({
+        host: config.redisPubSub.host,
+        port: config.redisPubSub.port,
+        db: config.redisPubSub.db,
+        maxRetriesPerRequest: 3,
+        lazyConnect: true,
+      });
 
-    // Redis Pub/Sub client (subscriber)
-    this.redisSubscriberClient = new Redis({
-      host: config.redisPubSub.host,
-      port: config.redisPubSub.port,
-      password: config.redisPubSub.password,
-      db: config.redisPubSub.db,
-      maxRetriesPerRequest: 3,
-    });
+      // Redis Pub/Sub client (subscriber)
+      this.redisSubscriberClient = new Redis({
+        host: config.redisPubSub.host,
+        port: config.redisPubSub.port,
+        db: config.redisPubSub.db,
+        maxRetriesPerRequest: 3,
+        lazyConnect: true,
+      });
 
-    console.log('✅ Redis clients initialized successfully');
+      // Add error handlers to prevent unhandled error events
+      [this.redisClient, this.redisTimeSeriesClient, this.redisPubSubClient, this.redisSubscriberClient].forEach((client, index) => {
+        const clientNames = ['main', 'timeseries', 'pubsub', 'subscriber'];
+
+        // Handle all types of errors
+        client.on('error', (error) => {
+          console.warn(`⚠️ Redis ${clientNames[index]} client error:`, error.message);
+        });
+
+        client.on('connect', () => {
+          console.log(`✅ Redis ${clientNames[index]} client connected`);
+        });
+
+        client.on('ready', () => {
+          console.log(`🚀 Redis ${clientNames[index]} client ready`);
+        });
+
+        client.on('close', () => {
+          console.log(`🔌 Redis ${clientNames[index]} client connection closed`);
+        });
+
+        client.on('reconnecting', () => {
+          console.log(`🔄 Redis ${clientNames[index]} client reconnecting...`);
+        });
+
+        // Handle node-specific errors
+        client.on('node error', (error) => {
+          console.warn(`⚠️ Redis ${clientNames[index]} node error:`, error.message);
+        });
+      });
+
+      // Test connections
+      await Promise.all([
+        this.redisClient.ping(),
+        this.redisTimeSeriesClient.ping(),
+        this.redisPubSubClient.ping(),
+        this.redisSubscriberClient.ping(),
+      ]);
+
+      console.log('✅ Redis clients initialized successfully');
+    } catch (error) {
+      console.error('❌ Failed to initialize Redis clients:', error);
+      throw error;
+    }
   }
 
   async onModuleDestroy() {

@@ -87,18 +87,20 @@ jobs:
         with:
           install: true
           driver: docker-container
-          driver-opts: |
-            image=moby/buildkit:latest
-          config-inline: |
-            [worker.oci]
-              max-parallelism = 2
-            [worker.containerd]
-              runtime = "runc"
-              rootless = false
+        continue-on-error: true
+
+      - name: Set up Docker Buildx (Simple Container)
+        id: buildx-setup-simple
+        if: steps.buildx-setup.outcome == 'failure'
+        uses: docker/setup-buildx-action@v3
+        with:
+          install: true
+          driver: docker-container
+        continue-on-error: true
 
       - name: Set up Docker Buildx (Fallback without cache)
         id: buildx-setup-fallback
-        if: failure()
+        if: steps.buildx-setup.outcome == 'failure' && steps.buildx-setup-simple.outcome == 'failure'
         uses: docker/setup-buildx-action@v3
         with:
           install: true
@@ -118,8 +120,20 @@ jobs:
           }
 
           # Check which driver is being used
-          DRIVER=$(docker buildx inspect --format '{{.Driver}}')
+          DRIVER=$(docker buildx inspect | grep "Driver:" | head -1 | awk '{print $2}')
           echo "BUILDX_DRIVER=$DRIVER" >> $GITHUB_ENV
+
+          # Check which setup step succeeded
+          if [ "${{ steps.buildx-setup.outcome }}" = "success" ]; then
+            echo "✅ Optimized container driver setup succeeded"
+            echo "SETUP_METHOD=optimized" >> $GITHUB_ENV
+          elif [ "${{ steps.buildx-setup-simple.outcome }}" = "success" ]; then
+            echo "✅ Simple container driver setup succeeded"
+            echo "SETUP_METHOD=simple" >> $GITHUB_ENV
+          elif [ "${{ steps.buildx-setup-fallback.outcome }}" = "success" ]; then
+            echo "⚠️  Fallback docker driver setup succeeded"
+            echo "SETUP_METHOD=fallback" >> $GITHUB_ENV
+          fi
 
           if [ "$DRIVER" = "docker-container" ]; then
             echo "✅ Container driver active - GitHub Actions cache supported"
@@ -143,11 +157,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set lowercase service name and repository
+        id: service-name
+        run: |
+          echo "service_lower=$(echo '${{ matrix.service }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+          echo "repo_lower=$(echo '${{ env.IMAGE_NAME_PREFIX }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_PREFIX }}/${{ matrix.service }}
+          images: ${{ env.REGISTRY }}/${{ steps.service-name.outputs.repo_lower }}/${{ steps.service-name.outputs.service_lower }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -171,10 +191,10 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: |
             type=gha
-            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_PREFIX }}/${{ matrix.service }}:buildcache
+            type=registry,ref=${{ env.REGISTRY }}/${{ steps.service-name.outputs.repo_lower }}/${{ matrix.service }}:buildcache
           cache-to: |
             type=gha,mode=max
-            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_PREFIX }}/${{ matrix.service }}:buildcache,mode=max
+            type=registry,ref=${{ env.REGISTRY }}/${{ steps.service-name.outputs.repo_lower }}/${{ matrix.service }}:buildcache,mode=max
           platforms: linux/amd64,linux/arm64
           build-args: |
             BUILDKIT_INLINE_CACHE=1
@@ -191,8 +211,8 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_PREFIX }}/${{ matrix.service }}:buildcache
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_PREFIX }}/${{ matrix.service }}:buildcache,mode=max
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ steps.service-name.outputs.repo_lower }}/${{ matrix.service }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ steps.service-name.outputs.repo_lower }}/${{ matrix.service }}:buildcache,mode=max
           platforms: linux/amd64,linux/arm64
           build-args: |
             BUILDKIT_INLINE_CACHE=1
@@ -245,10 +265,10 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: |
             type=gha
-            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_PREFIX }}/${{ matrix.service }}:buildcache
+            type=registry,ref=${{ env.REGISTRY }}/${{ steps.service-name.outputs.repo_lower }}/${{ matrix.service }}:buildcache
           cache-to: |
             type=gha,mode=max
-            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_PREFIX }}/${{ matrix.service }}:buildcache,mode=max
+            type=registry,ref=${{ env.REGISTRY }}/${{ steps.service-name.outputs.repo_lower }}/${{ matrix.service }}:buildcache,mode=max
           platforms: linux/amd64,linux/arm64
           build-args: |
             BUILDKIT_INLINE_CACHE=1
@@ -265,8 +285,8 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_PREFIX }}/${{ matrix.service }}:buildcache
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_PREFIX }}/${{ matrix.service }}:buildcache,mode=max
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ steps.service-name.outputs.repo_lower }}/${{ matrix.service }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ steps.service-name.outputs.repo_lower }}/${{ matrix.service }}:buildcache,mode=max
           platforms: linux/amd64,linux/arm64
           build-args: |
             BUILDKIT_INLINE_CACHE=1
@@ -309,19 +329,73 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install testing tools
+        run: |
+          # Install MongoDB Shell
+          curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | sudo gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg --dearmor
+          echo "deb [ signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu $(lsb_release -cs)/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+          sudo apt-get update
+          sudo apt-get install -y mongodb-mongosh redis-tools
+
       - name: Test with Docker Compose
         run: |
           # Create test environment file
           cat > .env.test << EOF
           NODE_ENV=test
-          MONGODB_URI=mongodb://admin:password@localhost:27017/two-services-test?authSource=admin
+          # MongoDB configuration
+          MONGO_HOST=localhost
+          MONGO_PORT=27017
+          MONGO_USERNAME=admin
+          MONGO_PASSWORD=password
+          MONGO_DATABASE=two-services-test
+          MONGO_AUTH_SOURCE=admin
+          MONGO_CONNECTION_STRING=mongodb://admin:password@localhost:27017/two-services-test?authSource=admin
+          # Redis configuration (all using the same Redis instance for testing)
           REDIS_HOST=localhost
           REDIS_PORT=6379
+          REDIS_PASSWORD=
+          REDIS_DB=0
+          REDIS_CONNECTION_STRING=redis://localhost:6379/0
+          # Redis TimeSeries (using same Redis instance)
+          REDIS_TIMESERIES_HOST=localhost
+          REDIS_TIMESERIES_PORT=6379
+          REDIS_TIMESERIES_PASSWORD=
+          REDIS_TIMESERIES_DB=1
+          REDIS_TIMESERIES_CONNECTION_STRING=redis://localhost:6379/1
+          # Redis PubSub (using same Redis instance)
+          REDIS_PUBSUB_HOST=localhost
+          REDIS_PUBSUB_PORT=6379
+          REDIS_PUBSUB_PASSWORD=
+          REDIS_PUBSUB_DB=2
+          REDIS_PUBSUB_CONNECTION_STRING=redis://localhost:6379/2
           EOF
 
           # Test the services can start
+          echo "=== Testing Docker Compose configuration ==="
           docker-compose -f docker-compose.yml config
           echo "✅ Docker Compose configuration is valid"
+
+          echo "=== Testing environment configuration ==="
+          # Source the test environment
+          set -a
+          source .env.test
+          set +a
+
+          # Test MongoDB connection
+          echo "Testing MongoDB connection..."
+          timeout 30s bash -c 'until mongosh "$MONGO_CONNECTION_STRING" --eval "db.runCommand({ping: 1})" --quiet; do sleep 1; done' || {
+            echo "❌ MongoDB connection test failed"
+            exit 1
+          }
+          echo "✅ MongoDB connection successful"
+
+          # Test Redis connection
+          echo "Testing Redis connections..."
+          redis-cli -h localhost -p 6379 ping || {
+            echo "❌ Redis connection test failed"
+            exit 1
+          }
+          echo "✅ Redis connection successful"
 
   # Vulnerability scanning
   security-scan:
@@ -345,13 +419,19 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set lowercase service name and repository
+        id: service-name
+        run: |
+          echo "service_lower=$(echo '${{ matrix.service }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+          echo "repo_lower=$(echo '${{ env.IMAGE_NAME_PREFIX }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
       - name: Debug image information
         run: |
-          IMAGE_REF="${{ env.REGISTRY }}/${{ env.IMAGE_NAME_PREFIX }}/${{ matrix.service }}:main"
+          IMAGE_REF="${{ env.REGISTRY }}/${{ steps.service-name.outputs.repo_lower }}/${{ steps.service-name.outputs.service_lower }}:main"
           echo "=== Image Information ==="
           echo "Registry: ${{ env.REGISTRY }}"
-          echo "Repository: ${{ env.IMAGE_NAME_PREFIX }}"
-          echo "Service: ${{ matrix.service }}"
+          echo "Repository: ${{ steps.service-name.outputs.repo_lower }}"
+          echo "Service: ${{ steps.service-name.outputs.service_lower }}"
           echo "Full image reference: $IMAGE_REF"
           echo "GitHub repository: ${{ github.repository }}"
 
@@ -359,7 +439,7 @@ jobs:
           # Try to pull the image to verify it exists
           if docker pull "$IMAGE_REF"; then
             echo "✅ Successfully pulled image: $IMAGE_REF"
-            docker images | grep "${{ matrix.service }}" || echo "No matching images found in local registry"
+            docker images | grep "${{ steps.service-name.outputs.service_lower }}" || echo "No matching images found in local registry"
           else
             echo "❌ Failed to pull image: $IMAGE_REF"
             echo "This could be because:"
@@ -373,7 +453,7 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@0.28.0
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_PREFIX }}/${{ matrix.service }}:main
+          image-ref: ${{ env.REGISTRY }}/${{ steps.service-name.outputs.repo_lower }}/${{ steps.service-name.outputs.service_lower }}:main
           format: 'sarif'
           output: 'trivy-results-${{ matrix.service }}.sarif'
           timeout: '15m'
@@ -391,7 +471,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install trivy
 
-          IMAGE_REF="${{ env.REGISTRY }}/${{ env.IMAGE_NAME_PREFIX }}/${{ matrix.service }}:main"
+          IMAGE_REF="${{ env.REGISTRY }}/${{ steps.service-name.outputs.repo_lower }}/${{ steps.service-name.outputs.service_lower }}:main"
           echo "Running Trivy scan manually on: $IMAGE_REF"
 
           trivy image --format sarif --output trivy-results-${{ matrix.service }}-fallback.sarif "$IMAGE_REF" || {

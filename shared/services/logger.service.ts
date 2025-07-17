@@ -8,7 +8,39 @@ export class LoggerService {
   private config = getBaseConfig();
   private serviceName: string;
 
-  constructor(serviceName: string) {
+  constructor() {
+    // Auto-detect service name from various sources
+    this.serviceName = this.detectServiceName();
+  }
+
+  private detectServiceName(): string {
+    // Try multiple methods to detect the service name
+    if (process.env.SERVICE_NAME) {
+      return process.env.SERVICE_NAME;
+    }
+
+    // Check process arguments
+    const args = process.argv.join(' ');
+    if (args.includes('serviceA')) {
+      return 'serviceA';
+    }
+    if (args.includes('serviceB')) {
+      return 'serviceB';
+    }
+
+    // Check working directory
+    const cwd = process.cwd();
+    if (cwd.includes('serviceA')) {
+      return 'serviceA';
+    }
+    if (cwd.includes('serviceB')) {
+      return 'serviceB';
+    }
+
+    return 'unknown-service';
+  }
+
+  setServiceName(serviceName: string): void {
     this.serviceName = serviceName;
   }
 

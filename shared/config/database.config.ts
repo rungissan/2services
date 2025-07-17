@@ -32,6 +32,15 @@ export interface DatabaseConfig {
 }
 
 export const getDatabaseConfig = (): DatabaseConfig => {
+  // Load local environment file for development if it exists
+  if (process.env.NODE_ENV !== 'production') {
+    try {
+      require('dotenv').config({ path: '.env.local' });
+    } catch {
+      // dotenv might not be available in all environments
+    }
+  }
+
   return {
     mongodb: {
       host: process.env.MONGO_HOST || 'localhost',
@@ -45,23 +54,23 @@ export const getDatabaseConfig = (): DatabaseConfig => {
     redis: {
       host: process.env.REDIS_HOST || 'localhost',
       port: parseInt(process.env.REDIS_PORT || '6379'),
-      password: process.env.REDIS_PASSWORD || 'password',
+      password: process.env.REDIS_PASSWORD || '',
       db: parseInt(process.env.REDIS_DB || '0'),
-      connectionString: process.env.REDIS_CONNECTION_STRING || 'redis://:password@localhost:6379/0',
+      connectionString: process.env.REDIS_CONNECTION_STRING || 'redis://localhost:6379/0',
     },
     redisTimeSeries: {
       host: process.env.REDIS_TIMESERIES_HOST || 'localhost',
       port: parseInt(process.env.REDIS_TIMESERIES_PORT || '6380'),
-      password: process.env.REDIS_TIMESERIES_PASSWORD || 'password',
+      password: process.env.REDIS_TIMESERIES_PASSWORD || '',
       db: parseInt(process.env.REDIS_TIMESERIES_DB || '0'),
-      connectionString: process.env.REDIS_TIMESERIES_CONNECTION_STRING || 'redis://:password@localhost:6380/0',
+      connectionString: process.env.REDIS_TIMESERIES_CONNECTION_STRING || 'redis://localhost:6380/0',
     },
     redisPubSub: {
       host: process.env.REDIS_PUBSUB_HOST || 'localhost',
       port: parseInt(process.env.REDIS_PUBSUB_PORT || '6381'),
-      password: process.env.REDIS_PUBSUB_PASSWORD || 'password',
+      password: process.env.REDIS_PUBSUB_PASSWORD || '',
       db: parseInt(process.env.REDIS_PUBSUB_DB || '0'),
-      connectionString: process.env.REDIS_PUBSUB_CONNECTION_STRING || 'redis://:password@localhost:6381/0',
+      connectionString: process.env.REDIS_PUBSUB_CONNECTION_STRING || 'redis://localhost:6381/0',
     },
   };
 };

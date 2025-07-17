@@ -76,14 +76,14 @@ services:
     container_name: two-services-redis-dev
     ports:
       - "6379:6379"
-    command: redis-server --appendonly yes --requirepass password
+    command: redis-server --appendonly yes
     volumes:
       - redis-dev-data:/data
       - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf
     networks:
       - microservices-network
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "password", "ping"]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -94,13 +94,13 @@ services:
     container_name: two-services-redis-timeseries-dev
     ports:
       - "6380:6379"
-    command: redis-server --loadmodule /usr/lib/redis/modules/redistimeseries.so --appendonly yes --requirepass password
+    command: redis-server --loadmodule /usr/lib/redis/modules/redistimeseries.so --appendonly yes
     volumes:
       - redis-timeseries-dev-data:/data
     networks:
       - microservices-network
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "password", "ping"]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -111,13 +111,13 @@ services:
     container_name: two-services-redis-pubsub-dev
     ports:
       - "6381:6379"
-    command: redis-server --requirepass password
+    command: redis-server
     volumes:
       - redis-pubsub-dev-data:/data
     networks:
       - microservices-network
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "password", "ping"]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -133,7 +133,6 @@ services:
     environment:
       - GRPC_PORT=50051
       - REDIS_TIMESERIES_ADDR=redis-timeseries:6379
-      - REDIS_PASSWORD=password
     volumes:
       - ./pdf-generator:/app
     networks:

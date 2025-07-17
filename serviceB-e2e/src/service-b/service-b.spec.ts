@@ -5,6 +5,15 @@ describe('GET /api', () => {
     const res = await axios.get(`/api`);
 
     expect(res.status).toBe(200);
-    expect(res.data).toEqual({ message: 'Hello API' });
+    expect(res.data).toEqual({
+      message: 'Hello from ServiceB API',
+      service: 'Logger & Reporter Service',
+      features: [
+        'Redis Event Subscription',
+        'MongoDB Event Logging',
+        'Log Query API',
+        'PDF Report Generation'
+      ]
+    });
   });
 });
