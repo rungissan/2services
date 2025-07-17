@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { readFileSync } from 'fs';
 
 // Reading the SWC compilation config for the spec files
@@ -17,5 +16,8 @@ export default {
     '^.+\\.[tj]s$': ['@swc/jest', swcJestConfig]
   },
   moduleFileExtensions: ['ts', 'js', 'html'],
-  coverageDirectory: 'test-output/jest/coverage'
+  coverageDirectory: 'test-output/jest/coverage',
+  testTimeout: 10000, // 10 second timeout
+  forceExit: true, // Force Jest to exit after tests complete
+  detectOpenHandles: false // We know about the Redis connection, don't warn about it
 };

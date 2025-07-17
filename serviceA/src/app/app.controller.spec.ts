@@ -12,6 +12,12 @@ describe('AppController', () => {
     }).compile();
   });
 
+  afterAll(async () => {
+    if (app) {
+      await app.close();
+    }
+  });
+
   describe('getData', () => {
     it('should return "Hello from ServiceA API"', () => {
       const appController = app.get<AppController>(AppController);

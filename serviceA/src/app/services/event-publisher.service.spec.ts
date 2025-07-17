@@ -9,6 +9,7 @@ const MockedRedis = Redis as jest.MockedClass<typeof Redis>;
 
 describe('EventPublisherService', () => {
   let service: EventPublisherService;
+  let testingModule: TestingModule;
   let mockRedisService: jest.Mocked<RedisService>;
   let mockRedisClient: jest.Mocked<Pick<Redis, 'publish' | 'disconnect'>>;
   let consoleLogSpy: jest.SpyInstance;
@@ -29,7 +30,7 @@ describe('EventPublisherService', () => {
       disconnect: jest.fn(),
     } as unknown as jest.Mocked<RedisService>;
 
-    const module: TestingModule = await Test.createTestingModule({
+    testingModule = await Test.createTestingModule({
       providers: [
         EventPublisherService,
         {
@@ -39,17 +40,32 @@ describe('EventPublisherService', () => {
       ],
     }).compile();
 
-    service = module.get<EventPublisherService>(EventPublisherService);
+    testingModule = await Test.createTestingModule({
+      providers: [
+        EventPublisherService,
+        {
+          provide: RedisService,
+          useValue: mockRedisService,
+        },
+      ],
+    }).compile();
+
+    service = testingModule.get<EventPublisherService>(EventPublisherService);
 
     // Suppress console output during tests
     consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     jest.clearAllMocks();
     consoleLogSpy.mockRestore();
     consoleErrorSpy.mockRestore();
+
+    // Close the testing module to clean up resources
+    if (testingModule) {
+      await testingModule.close();
+    }
   });
 
   describe('publishFileUploadEvent', () => {
