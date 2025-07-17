@@ -7,7 +7,7 @@ module.exports = {
   },
   resolve: {
     alias: {
-      '@two-services/shared': join(__dirname, '../shared/dist/index.js'),
+      '@two-services/shared': join(__dirname, '../shared/index.ts'),
     },
   },
   plugins: [

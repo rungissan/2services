@@ -29,6 +29,32 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Setup Node.js (for ServiceA/ServiceB builds)
+        if: matrix.service == 'serviceA' || matrix.service == 'serviceB'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies (for ServiceA/ServiceB)
+        if: matrix.service == 'serviceA' || matrix.service == 'serviceB'
+        run: npm ci --legacy-peer-deps
+
+      - name: Build Node.js services
+        if: matrix.service == 'serviceA' || matrix.service == 'serviceB'
+        run: |
+          echo "Building ${{ matrix.service }}..."
+          npx nx build ${{ matrix.service }}
+
+          # Verify the build output exists
+          if [ ! -d "${{ matrix.service }}/dist" ]; then
+            echo "❌ Build failed: ${{ matrix.service }}/dist directory not found"
+            exit 1
+          fi
+
+          echo "✅ Build successful: ${{ matrix.service }}/dist directory created"
+          ls -la ${{ matrix.service }}/dist/
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 

@@ -81,10 +81,36 @@ jobs:
         run: |
           npx nx run-many -t test --coverage
 
-          # Combine coverage reports
+          # Create combined coverage directory
           mkdir -p coverage
-          npx nyc merge serviceA/coverage serviceB/coverage shared/coverage coverage/coverage.json
-          npx nyc report --reporter=lcov --report-dir=coverage
+
+          # Check what coverage files exist
+          echo "=== Coverage files found ==="
+          find . -name "lcov.info" | grep -v node_modules | head -10
+
+          # Combine LCOV files from both services
+          if [ -f "serviceA/test-output/jest/coverage/lcov.info" ] && [ -f "serviceB/test-output/jest/coverage/lcov.info" ]; then
+            echo "=== Combining LCOV files ==="
+            cat serviceA/test-output/jest/coverage/lcov.info serviceB/test-output/jest/coverage/lcov.info > coverage/lcov.info
+            echo "✅ Combined coverage report created"
+            echo "ServiceA coverage lines: $(wc -l < serviceA/test-output/jest/coverage/lcov.info)"
+            echo "ServiceB coverage lines: $(wc -l < serviceB/test-output/jest/coverage/lcov.info)"
+            echo "Combined coverage lines: $(wc -l < coverage/lcov.info)"
+          elif [ -f "serviceA/test-output/jest/coverage/lcov.info" ]; then
+            echo "=== Using ServiceA coverage only ==="
+            cp serviceA/test-output/jest/coverage/lcov.info coverage/lcov.info
+          elif [ -f "serviceB/test-output/jest/coverage/lcov.info" ]; then
+            echo "=== Using ServiceB coverage only ==="
+            cp serviceB/test-output/jest/coverage/lcov.info coverage/lcov.info
+          else
+            echo "⚠️ No LCOV files found, creating empty coverage report"
+            touch coverage/lcov.info
+          fi
+
+          # Verify the combined file
+          if [ -f "coverage/lcov.info" ]; then
+            echo "Final coverage file size: $(wc -l < coverage/lcov.info) lines"
+          fi
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3

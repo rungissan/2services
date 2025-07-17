@@ -17,6 +17,7 @@ export default {
   },
   moduleFileExtensions: ['ts', 'js', 'html'],
   coverageDirectory: 'test-output/jest/coverage',
+  coverageReporters: ['html', 'lcov', 'text-summary'],
   testTimeout: 10000, // 10 second timeout
   forceExit: true, // Force Jest to exit after tests complete
   detectOpenHandles: false, // We know about the Redis connection, don't warn about it
