@@ -4,10 +4,10 @@ import { getDatabaseConfig } from '../config/database.config';
 
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {
-  private redisClient: Redis;
-  private redisTimeSeriesClient: Redis;
-  private redisPubSubClient: Redis;
-  private redisSubscriberClient: Redis;
+  private redisClient!: Redis;
+  private redisTimeSeriesClient!: Redis;
+  private redisPubSubClient!: Redis;
+  private redisSubscriberClient!: Redis;
 
   async onModuleInit() {
     const config = getDatabaseConfig();

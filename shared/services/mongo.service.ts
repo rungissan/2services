@@ -4,8 +4,8 @@ import { getDatabaseConfig } from '../config/database.config';
 
 @Injectable()
 export class MongoService implements OnModuleInit, OnModuleDestroy {
-  private client: MongoClient;
-  private db: Db;
+  private client!: MongoClient;
+  private db!: Db;
 
   async onModuleInit() {
     const config = getDatabaseConfig();
