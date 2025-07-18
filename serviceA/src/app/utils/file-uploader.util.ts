@@ -22,7 +22,7 @@ const upload = multer({
 
 export { upload };
 
-export async function uploadAndParseFile(req: UploadRequest): Promise<void> {
+export async function uploadAndParseFile(req: UploadRequest): Promise<number> {
   const file = req.file;
   if (!file) throw new Error('No file uploaded');
 
@@ -55,7 +55,9 @@ export async function uploadAndParseFile(req: UploadRequest): Promise<void> {
     await collection.bulkWrite(bulkOps);
     await client.close();
 
-    console.log(`Successfully processed ${data.metrics.length} metrics`);
+    const recordsProcessed = data.metrics.length;
+    console.log(`Successfully processed ${recordsProcessed} metrics`);
+    return recordsProcessed;
   } catch (error) {
     console.error('Error processing file:', error);
     throw error;

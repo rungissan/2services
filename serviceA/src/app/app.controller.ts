@@ -34,7 +34,7 @@ export class AppController {
   @ApiResponse({ status: 500, description: 'Internal server error' })
   async fetchData() {
     try {
-      await fetchAndSaveData();
+      const recordsProcessed = await fetchAndSaveData();
 
       // Publish event
       const eventPublisher = EventPublisher.getInstance();
@@ -47,7 +47,7 @@ export class AppController {
       return {
         message: 'Data fetched and saved successfully',
         timestamp: new Date().toISOString(),
-        recordsProcessed: 100 // This should be actual count
+        recordsProcessed
       };
     } catch (error) {
       throw new Error(`Failed to fetch data: ${(error as Error).message}`);
@@ -69,7 +69,7 @@ export class AppController {
   async uploadFile(@UploadedFile() file: Express.Multer.File) {
     try {
       const req: UploadRequest = { file };
-      await uploadAndParseFile(req);
+      const recordsProcessed = await uploadAndParseFile(req);
 
       // Publish event
       const eventPublisher = EventPublisher.getInstance();
@@ -82,7 +82,7 @@ export class AppController {
       return {
         message: 'File uploaded and processed successfully',
         filename: file.originalname,
-        recordsProcessed: 250 // This should be actual count
+        recordsProcessed
       };
     } catch (error) {
       throw new Error(`Failed to upload file: ${(error as Error).message}`);
@@ -99,9 +99,16 @@ export class AppController {
   })
   @ApiResponse({ status: 400, description: 'Bad request - invalid search parameters' })
   @ApiResponse({ status: 500, description: 'Internal server error' })
-  async search(@Query() query: SearchQueryDto) {
+  async search(@Query() queryDto: SearchQueryDto) {
     try {
-      const results = await searchMetrics(query as SearchQuery);
+      // Map DTO to SearchQuery interface
+      const searchQuery: SearchQuery = {
+        q: queryDto.query,
+        page: queryDto.page,
+        limit: queryDto.limit,
+      };
+
+      const results = await searchMetrics(searchQuery);
 
       // Publish event
       const eventPublisher = EventPublisher.getInstance();
@@ -113,8 +120,8 @@ export class AppController {
       return {
         data: results,
         total: Array.isArray(results) ? results.length : 0,
-        page: query.page || 1,
-        limit: query.limit || 10
+        page: queryDto.page || 1,
+        limit: queryDto.limit || 10
       };
     } catch (error) {
       throw new Error(`Search failed: ${(error as Error).message}`);
