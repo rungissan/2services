@@ -275,8 +275,8 @@ two-services/
    ```
 
 2. **Services will be available at:**
-   - ServiceA: http://localhost:3001/api
-   - ServiceB: http://localhost:3002/api
+   - ServiceA: http://localhost:3000/api
+   - ServiceB: http://localhost:3001/api
    - PDF Generator: grpc://localhost:50051
    - MongoDB: mongodb://localhost:27017
    - Redis: redis://localhost:6379
@@ -306,7 +306,7 @@ two-services/
    # or
    npx nx run @two-services/serviceA:serve
    ```
-   ServiceA will be available at: http://localhost:3001/api
+   ServiceA will be available at: http://localhost:3000/api
 
 4. **Run ServiceB:**
    ```bash
@@ -314,7 +314,7 @@ two-services/
    # or
    npx nx run @two-services/serviceB:serve
    ```
-   ServiceB will be available at: http://localhost:3002/api
+   ServiceB will be available at: http://localhost:3001/api
 
 5. **Run PDF Generator:**
    ```bash
@@ -491,26 +491,26 @@ find . -name "*.ts" -not -path "./node_modules/*" | head -20 | xargs cr
 
 ## API Endpoints
 
-### ServiceA (Port 3001) - Data Ingestion & Processing
+### ServiceA (Port 3000) - Data Ingestion & Processing
+- **GET** `http://localhost:3000/api` - Health check
+- **GET** `http://localhost:3000/api/health` - Health status
+- **POST** `http://localhost:3000/api/upload` - File upload (JSON/Excel)
+- **GET** `http://localhost:3000/api/search` - Search MongoDB data
+- **POST** `http://localhost:3000/api/stream` - Stream data processing
+- **POST** `http://localhost:3000/api/data` - Store data in MongoDB
+- **GET** `http://localhost:3000/api/data` - Retrieve data from MongoDB
+- **POST** `http://localhost:3000/api/events` - Publish events to Redis Pub/Sub
+
+### ServiceB (Port 3001) - Logging & Reporting
 - **GET** `http://localhost:3001/api` - Health check
 - **GET** `http://localhost:3001/api/health` - Health status
-- **POST** `http://localhost:3001/api/upload` - File upload (JSON/Excel)
-- **GET** `http://localhost:3001/api/search` - Search MongoDB data
-- **POST** `http://localhost:3001/api/stream` - Stream data processing
-- **POST** `http://localhost:3001/api/data` - Store data in MongoDB
-- **GET** `http://localhost:3001/api/data` - Retrieve data from MongoDB
-- **POST** `http://localhost:3001/api/events` - Publish events to Redis Pub/Sub
-
-### ServiceB (Port 3002) - Logging & Reporting
-- **GET** `http://localhost:3002/api` - Health check
-- **GET** `http://localhost:3002/api/health` - Health status
-- **POST** `http://localhost:3002/api/metrics` - Store time-series data
-- **GET** `http://localhost:3002/api/metrics` - Retrieve time-series data
-- **POST** `http://localhost:3002/api/cache` - Cache operations
-- **GET** `http://localhost:3002/api/logs` - Query event logs
-- **POST** `http://localhost:3002/reports/generate` - Generate PDF report (sync)
-- **POST** `http://localhost:3002/reports/generate-async` - Generate PDF report (async)
-- **GET** `http://localhost:3002/reports/status/:reportId` - Get report status
+- **POST** `http://localhost:3001/api/metrics` - Store time-series data
+- **GET** `http://localhost:3001/api/metrics` - Retrieve time-series data
+- **POST** `http://localhost:3001/api/cache` - Cache operations
+- **GET** `http://localhost:3001/api/logs` - Query event logs
+- **POST** `http://localhost:3001/reports/generate` - Generate PDF report (sync)
+- **POST** `http://localhost:3001/reports/generate-async` - Generate PDF report (async)
+- **GET** `http://localhost:3001/reports/status/:reportId` - Get report status
 
 ### PDF Generator (Port 50051) - gRPC Service
 - **GenerateReport** - Generate PDF from time-series data
@@ -522,11 +522,11 @@ find . -name "*.ts" -not -path "./node_modules/*" | head -20 | xargs cr
 
 ```bash
 # Upload data via ServiceA
-curl -X POST http://localhost:3001/api/upload \
+curl -X POST http://localhost:3000/api/upload \
   -F "file=@temperature-data.xlsx"
 
 # Generate PDF report via ServiceB
-curl -X POST http://localhost:3002/reports/generate \
+curl -X POST http://localhost:3001/reports/generate \
   -H "Content-Type: application/json" \
   -d '{
     "reportType": "daily",
@@ -542,7 +542,7 @@ curl -X POST http://localhost:3002/reports/generate \
 
 ```bash
 # Stream data to ServiceA
-curl -X POST http://localhost:3001/api/stream \
+curl -X POST http://localhost:3000/api/stream \
   -H "Content-Type: application/json" \
   -d '{
     "source": "sensor1",
@@ -557,14 +557,14 @@ curl -X POST http://localhost:3001/api/stream \
 
 ```bash
 # Query metrics from ServiceB
-curl -X GET "http://localhost:3002/api/metrics?metric=temperature&start=2024-01-01T00:00:00Z&end=2024-01-02T00:00:00Z"
+curl -X GET "http://localhost:3001/api/metrics?metric=temperature&start=2024-01-01T00:00:00Z&end=2024-01-02T00:00:00Z"
 ```
 
 ### 4. Generate Async PDF Report
 
 ```bash
 # Start async report generation
-curl -X POST http://localhost:3002/reports/generate-async \
+curl -X POST http://localhost:3001/reports/generate-async \
   -H "Content-Type: application/json" \
   -d '{
     "reportType": "weekly",
@@ -575,7 +575,7 @@ curl -X POST http://localhost:3002/reports/generate-async \
   }'
 
 # Check report status
-curl -X GET http://localhost:3002/reports/status/report_1640995200000
+curl -X GET http://localhost:3001/reports/status/report_1640995200000
 ```
 
 ## Data Services Integration
