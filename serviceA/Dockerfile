@@ -19,14 +19,17 @@ RUN addgroup --system two-services-servicea && \
 COPY serviceA/package.json ./
 RUN npm install
 
+# Copy built dist folder and source code
+COPY serviceA/dist ./dist/
 COPY serviceA/. ./
+
 RUN chown -R two-services-servicea:two-services-servicea .
 
 EXPOSE 3000
 
 USER two-services-servicea
 
-CMD ["npm", "run", "start:dev"]
+CMD ["node", "dist/main.js"]
 
 # Production stage
 FROM docker.io/node:lts-alpine AS production
@@ -51,4 +54,4 @@ EXPOSE 3000
 
 USER two-services-servicea
 
-CMD [ "node", "two-services-servicea" ]
+CMD [ "node", "two-services-servicea/main.js" ]

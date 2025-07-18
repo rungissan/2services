@@ -19,14 +19,17 @@ RUN addgroup --system two-services-serviceb && \
 COPY serviceB/package.json ./
 RUN npm install
 
+# Copy built dist folder and source code
+COPY serviceB/dist ./dist/
 COPY serviceB/. ./
+
 RUN chown -R two-services-serviceb:two-services-serviceb .
 
 EXPOSE 3001
 
 USER two-services-serviceb
 
-CMD ["npm", "run", "start:dev"]
+CMD ["node", "dist/main.js"]
 
 # Production stage
 FROM docker.io/node:lts-alpine AS production
@@ -51,4 +54,4 @@ EXPOSE 3001
 
 USER two-services-serviceb
 
-CMD [ "node", "two-services-serviceb" ]
+CMD [ "node", "two-services-serviceb/main.js" ]
