@@ -39,33 +39,48 @@ export const getDatabaseConfig = (): DatabaseConfig => {
     }
   }
 
+  const mongoHost = process.env.MONGO_HOST || 'localhost';
+  const mongoPort = process.env.MONGO_PORT || '27017';
+  const mongoUsername = process.env.MONGO_USERNAME || '';
+  const mongoPassword = process.env.MONGO_PASSWORD || '';
+  const mongoDatabase = process.env.MONGO_DATABASE || 'two-services';
+  const mongoAuthSource = process.env.MONGO_AUTH_SOURCE || 'admin';
+
+  // Build connection string dynamically based on whether we have credentials
+  let mongoConnectionString;
+  if (mongoUsername && mongoPassword) {
+    mongoConnectionString = `mongodb://${mongoUsername}:${mongoPassword}@${mongoHost}:${mongoPort}/${mongoDatabase}?authSource=${mongoAuthSource}`;
+  } else {
+    mongoConnectionString = `mongodb://${mongoHost}:${mongoPort}/${mongoDatabase}`;
+  }
+
   return {
     mongodb: {
-      host: process.env.MONGO_HOST || 'localhost',
-      port: parseInt(process.env.MONGO_PORT || '27017'),
-      username: process.env.MONGO_USERNAME || 'app-user',
-      password: process.env.MONGO_PASSWORD || 'app-password',
-      database: process.env.MONGO_DATABASE || 'two-services',
-      authSource: process.env.MONGO_AUTH_SOURCE || 'two-services',
-      connectionString: process.env.MONGO_CONNECTION_STRING || 'mongodb://app-user:app-password@localhost:27017/two-services',
+      host: mongoHost,
+      port: parseInt(mongoPort),
+      username: mongoUsername,
+      password: mongoPassword,
+      database: mongoDatabase,
+      authSource: mongoAuthSource,
+      connectionString: process.env.MONGO_CONNECTION_STRING || mongoConnectionString,
     },
     redis: {
       host: process.env.REDIS_HOST || 'localhost',
       port: parseInt(process.env.REDIS_PORT || '6379'),
       db: parseInt(process.env.REDIS_DB || '0'),
-      connectionString: process.env.REDIS_CONNECTION_STRING || 'redis://localhost:6379/0',
+      connectionString: process.env.REDIS_CONNECTION_STRING || `redis://${process.env.REDIS_HOST || 'localhost'}:${process.env.REDIS_PORT || '6379'}/${process.env.REDIS_DB || '0'}`,
     },
     redisTimeSeries: {
       host: process.env.REDIS_TIMESERIES_HOST || 'localhost',
       port: parseInt(process.env.REDIS_TIMESERIES_PORT || '6380'),
       db: parseInt(process.env.REDIS_TIMESERIES_DB || '0'),
-      connectionString: process.env.REDIS_TIMESERIES_CONNECTION_STRING || 'redis://localhost:6380/0',
+      connectionString: process.env.REDIS_TIMESERIES_CONNECTION_STRING || `redis://${process.env.REDIS_TIMESERIES_HOST || 'localhost'}:${process.env.REDIS_TIMESERIES_PORT || '6380'}/${process.env.REDIS_TIMESERIES_DB || '0'}`,
     },
     redisPubSub: {
       host: process.env.REDIS_PUBSUB_HOST || 'localhost',
       port: parseInt(process.env.REDIS_PUBSUB_PORT || '6381'),
       db: parseInt(process.env.REDIS_PUBSUB_DB || '0'),
-      connectionString: process.env.REDIS_PUBSUB_CONNECTION_STRING || 'redis://localhost:6381/0',
+      connectionString: process.env.REDIS_PUBSUB_CONNECTION_STRING || `redis://${process.env.REDIS_PUBSUB_HOST || 'localhost'}:${process.env.REDIS_PUBSUB_PORT || '6381'}/${process.env.REDIS_PUBSUB_DB || '0'}`,
     },
   };
 };
