@@ -12,8 +12,32 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3000
-    env_file:
-      - .env
+      # MongoDB
+      - MONGO_HOST=mongodb
+      - MONGO_PORT=27017
+      - MONGO_USERNAME=admin
+      - MONGO_PASSWORD=password
+      - MONGO_DATABASE=two-services
+      - MONGO_AUTH_SOURCE=admin
+      - MONGO_CONNECTION_STRING=mongodb://admin:password@mongodb:27017/two-services?authSource=admin
+      # Redis
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=
+      - REDIS_DB=0
+      - REDIS_CONNECTION_STRING=redis://redis:6379/0
+      # Redis TimeSeries
+      - REDIS_TIMESERIES_HOST=redis-timeseries
+      - REDIS_TIMESERIES_PORT=6379
+      - REDIS_TIMESERIES_PASSWORD=
+      - REDIS_TIMESERIES_DB=0
+      - REDIS_TIMESERIES_CONNECTION_STRING=redis://redis-timeseries:6379/0
+      # Redis PubSub
+      - REDIS_PUBSUB_HOST=redis-pubsub
+      - REDIS_PUBSUB_PORT=6379
+      - REDIS_PUBSUB_PASSWORD=
+      - REDIS_PUBSUB_DB=0
+      - REDIS_PUBSUB_CONNECTION_STRING=redis://redis-pubsub:6379/0
     volumes:
       - ./serviceA/src:/app/two-services-servicea/src
       - ./serviceA/package.json:/app/two-services-servicea/package.json
@@ -36,8 +60,32 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3001
-    env_file:
-      - .env
+      # MongoDB
+      - MONGO_HOST=mongodb
+      - MONGO_PORT=27017
+      - MONGO_USERNAME=admin
+      - MONGO_PASSWORD=password
+      - MONGO_DATABASE=two-services
+      - MONGO_AUTH_SOURCE=admin
+      - MONGO_CONNECTION_STRING=mongodb://admin:password@mongodb:27017/two-services?authSource=admin
+      # Redis
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=
+      - REDIS_DB=0
+      - REDIS_CONNECTION_STRING=redis://redis:6379/0
+      # Redis TimeSeries
+      - REDIS_TIMESERIES_HOST=redis-timeseries
+      - REDIS_TIMESERIES_PORT=6379
+      - REDIS_TIMESERIES_PASSWORD=
+      - REDIS_TIMESERIES_DB=0
+      - REDIS_TIMESERIES_CONNECTION_STRING=redis://redis-timeseries:6379/0
+      # Redis PubSub
+      - REDIS_PUBSUB_HOST=redis-pubsub
+      - REDIS_PUBSUB_PORT=6379
+      - REDIS_PUBSUB_PASSWORD=
+      - REDIS_PUBSUB_DB=0
+      - REDIS_PUBSUB_CONNECTION_STRING=redis://redis-pubsub:6379/0
     volumes:
       - ./serviceB/src:/app/two-services-serviceb/src
       - ./serviceB/package.json:/app/two-services-serviceb/package.json

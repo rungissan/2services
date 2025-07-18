@@ -16,8 +16,9 @@ WORKDIR /app
 RUN addgroup --system two-services-serviceb && \
           adduser --system -G two-services-serviceb two-services-serviceb
 
-COPY serviceB/package.json ./
-RUN npm install
+# Copy root workspace package.json and lock file for all dependencies
+COPY package.json package-lock.json ./
+RUN npm ci --legacy-peer-deps
 
 # Copy built dist folder and source code
 COPY serviceB/dist ./dist/
@@ -42,13 +43,12 @@ WORKDIR /app
 RUN addgroup --system two-services-serviceb && \
           adduser --system -G two-services-serviceb two-services-serviceb
 
-COPY serviceB/dist two-services-serviceb/
-COPY serviceB/package.json two-services-serviceb/
-RUN chown -R two-services-serviceb:two-services-serviceb .
+# Copy root workspace dependencies for production
+COPY package.json package-lock.json ./
+RUN npm ci --legacy-peer-deps --omit=dev
 
-# You can remove this install step if you build with `--bundle` option.
-# The bundled output will include external dependencies.
-RUN npm --prefix two-services-serviceb --omit=dev -f install
+COPY serviceB/dist two-services-serviceb/
+RUN chown -R two-services-serviceb:two-services-serviceb .
 
 EXPOSE 3001
 
