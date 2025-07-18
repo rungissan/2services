@@ -80,13 +80,34 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         });
       });
 
-      // Test connections
-      await Promise.all([
-        this.redisClient.ping(),
-        this.redisTimeSeriesClient.ping(),
-        this.redisPubSubClient.ping(),
-        this.redisSubscriberClient.ping(),
-      ]);
+      // Test connections with proper error handling
+      try {
+        await this.redisClient.ping();
+        console.log('✅ Redis main client ping successful');
+      } catch (error) {
+        console.error('❌ Redis main client ping failed:', error instanceof Error ? error.message : error);
+      }
+
+      try {
+        await this.redisTimeSeriesClient.ping();
+        console.log('✅ Redis timeseries client ping successful');
+      } catch (error) {
+        console.error('❌ Redis timeseries client ping failed:', error instanceof Error ? error.message : error);
+      }
+
+      try {
+        await this.redisPubSubClient.ping();
+        console.log('✅ Redis pubsub client ping successful');
+      } catch (error) {
+        console.error('❌ Redis pubsub client ping failed:', error instanceof Error ? error.message : error);
+      }
+
+      try {
+        await this.redisSubscriberClient.ping();
+        console.log('✅ Redis subscriber client ping successful');
+      } catch (error) {
+        console.error('❌ Redis subscriber client ping failed:', error instanceof Error ? error.message : error);
+      }
 
       console.log('✅ Redis clients initialized successfully');
     } catch (error) {

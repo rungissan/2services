@@ -48,19 +48,16 @@ This project contains a complete microservices architecture with NestJS services
 ### Redis (Port 6379)
 - **Purpose**: Caching and session storage
 - **Configuration**: Persistence enabled with AOF and RDB
-- **Password**: password
 
 ### Redis TimeSeries (Port 6380)
 - **Purpose**: Time-series data storage and analytics
 - **Features**: Built-in aggregation, downsampling, and retention policies
 - **Key Pattern**: `ts:metric:source:filename`
 - **Example**: `ts:temperature:sensor1:data.xlsx`
-- **Password**: password
 
 ### Redis Pub/Sub (Port 6381)
 - **Purpose**: Inter-service communication and event messaging
 - **Features**: Real-time message broadcasting between services
-- **Password**: password
 
 ### PDF Generator Service (Port 50051)
 - **Purpose**: Generate PDF reports from Redis TimeSeries data
@@ -478,16 +475,16 @@ find . -name "*.ts" -not -path "./node_modules/*" | head -20 | xargs cr
 - **Database**: `two-services`
 
 ### Redis
-- **Connection**: `redis://:password@localhost:6379/0`
-- **CLI Access**: `redis-cli -h localhost -p 6379 -a password`
+- **Connection**: `redis://localhost:6379/0`
+- **CLI Access**: `redis-cli -h localhost -p 6379`
 
 ### Redis TimeSeries
-- **Connection**: `redis://:password@localhost:6380/0`
-- **CLI Access**: `redis-cli -h localhost -p 6380 -a password`
+- **Connection**: `redis://localhost:6380/0`
+- **CLI Access**: `redis-cli -h localhost -p 6380`
 
 ### Redis Pub/Sub
-- **Connection**: `redis://:password@localhost:6381/0`
-- **CLI Access**: `redis-cli -h localhost -p 6381 -a password`
+- **Connection**: `redis://localhost:6381/0`
+- **CLI Access**: `redis-cli -h localhost -p 6381`
 
 ## API Endpoints
 
@@ -703,19 +700,16 @@ These variables are used by the centralized configuration system:
 #### Redis Configuration
 - `REDIS_HOST`: Redis host (default: localhost)
 - `REDIS_PORT`: Redis port (default: 6379)
-- `REDIS_PASSWORD`: Redis password (default: password)
 - `REDIS_DB`: Redis database number (default: 0)
 
 #### Redis TimeSeries Configuration
 - `REDIS_TIMESERIES_HOST`: Redis TimeSeries host (default: localhost)
 - `REDIS_TIMESERIES_PORT`: Redis TimeSeries port (default: 6380)
-- `REDIS_TIMESERIES_PASSWORD`: Redis TimeSeries password (default: password)
 - `REDIS_TIMESERIES_DB`: Redis TimeSeries database number (default: 0)
 
 #### Redis Pub/Sub Configuration
 - `REDIS_PUBSUB_HOST`: Redis Pub/Sub host (default: localhost)
 - `REDIS_PUBSUB_PORT`: Redis Pub/Sub port (default: 6381)
-- `REDIS_PUBSUB_PASSWORD`: Redis Pub/Sub password (default: password)
 - `REDIS_PUBSUB_DB`: Redis Pub/Sub database number (default: 0)
 
 ### Service-Specific Variables
@@ -736,7 +730,6 @@ These variables are used by the centralized configuration system:
 ### PDF Generator
 - `GRPC_PORT`: gRPC server port (default: 50051)
 - `REDIS_TIMESERIES_ADDR`: Redis TimeSeries address (default: localhost:6380)
-- `REDIS_PASSWORD`: Redis password (default: password)
 
 ### Configuration Override Examples
 
@@ -748,7 +741,6 @@ export MONGODB_PASSWORD=secure-password
 
 # Override Redis settings
 export REDIS_HOST=redis-cluster.example.com
-export REDIS_PASSWORD=redis-secure-password
 
 # Override service ports
 export SERVICEA_PORT=4001
@@ -835,20 +827,20 @@ cd .. && ./test-pdf-generator.sh
 mongo mongodb://admin:password@localhost:27017/two-services
 
 # Connect to Redis
-redis-cli -h localhost -p 6379 -a password
+redis-cli -h localhost -p 6379
 
 # Connect to Redis TimeSeries
-redis-cli -h localhost -p 6380 -a password
+redis-cli -h localhost -p 6380
 
 # Connect to Redis Pub/Sub
-redis-cli -h localhost -p 6381 -a password
+redis-cli -h localhost -p 6381
 
 # Test Redis TimeSeries
-redis-cli -h localhost -p 6380 -a password
+redis-cli -h localhost -p 6380
 TS.ADD ts:temperature:test:sample.json * 25.5 LABELS metric temperature source test
 
 # Query Redis TimeSeries
-redis-cli -h localhost -p 6380 -a password
+redis-cli -h localhost -p 6380
 TS.RANGE ts:temperature:test:sample.json 0 -1
 ```
 

@@ -11,21 +11,18 @@ export interface DatabaseConfig {
   redis: {
     host: string;
     port: number;
-    password: string;
     db: number;
     connectionString: string;
   };
   redisTimeSeries: {
     host: string;
     port: number;
-    password: string;
     db: number;
     connectionString: string;
   };
   redisPubSub: {
     host: string;
     port: number;
-    password: string;
     db: number;
     connectionString: string;
   };
@@ -36,6 +33,7 @@ export const getDatabaseConfig = (): DatabaseConfig => {
   if (process.env.NODE_ENV !== 'production') {
     try {
       require('dotenv').config({ path: '.env.local' });
+      require('dotenv').config({ path: '.env' });
     } catch {
       // dotenv might not be available in all environments
     }
@@ -54,21 +52,18 @@ export const getDatabaseConfig = (): DatabaseConfig => {
     redis: {
       host: process.env.REDIS_HOST || 'localhost',
       port: parseInt(process.env.REDIS_PORT || '6379'),
-      password: process.env.REDIS_PASSWORD || '',
       db: parseInt(process.env.REDIS_DB || '0'),
       connectionString: process.env.REDIS_CONNECTION_STRING || 'redis://localhost:6379/0',
     },
     redisTimeSeries: {
       host: process.env.REDIS_TIMESERIES_HOST || 'localhost',
       port: parseInt(process.env.REDIS_TIMESERIES_PORT || '6380'),
-      password: process.env.REDIS_TIMESERIES_PASSWORD || '',
       db: parseInt(process.env.REDIS_TIMESERIES_DB || '0'),
       connectionString: process.env.REDIS_TIMESERIES_CONNECTION_STRING || 'redis://localhost:6380/0',
     },
     redisPubSub: {
       host: process.env.REDIS_PUBSUB_HOST || 'localhost',
       port: parseInt(process.env.REDIS_PUBSUB_PORT || '6381'),
-      password: process.env.REDIS_PUBSUB_PASSWORD || '',
       db: parseInt(process.env.REDIS_PUBSUB_DB || '0'),
       connectionString: process.env.REDIS_PUBSUB_CONNECTION_STRING || 'redis://localhost:6381/0',
     },
